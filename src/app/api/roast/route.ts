@@ -2,6 +2,7 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { defaultOpenAIModel, getOpenAIClient } from "@/lib/openai";
 import { createRoastUserPrompt, roastSystemPrompt } from "@/lib/prompts";
 import { normalizeResumeText, sha256 } from "@/lib/hash";
+import { extractPdfText } from "@/lib/pdf";
 import { roastAnalysisSchema } from "@/lib/schemas";
 
 export const runtime = "nodejs";
@@ -39,6 +40,18 @@ export async function POST(request: Request) {
     }
 
     const buffer = Buffer.from(await resume.arrayBuffer());
+    const extractedResumeText = normalizeResumeText(await extractPdfText(buffer));
+
+    if (!extractedResumeText) {
+      return Response.json(
+        {
+          error:
+            "I couldn't extract readable text from that PDF. Try a text-based export instead of an image-only scan.",
+        },
+        { status: 400 },
+      );
+    }
+
     const openai = getOpenAIClient();
 
     const response = await openai.responses.parse({
@@ -53,9 +66,8 @@ export async function POST(request: Request) {
           content: [
             { type: "input_text", text: createRoastUserPrompt(resume.name) },
             {
-              type: "input_file",
-              filename: resume.name,
-              file_data: buffer.toString("base64"),
+              type: "input_text",
+              text: `Extracted resume text from ${resume.name}:\n\n${extractedResumeText}`,
             },
           ],
         },
