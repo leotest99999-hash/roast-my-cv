@@ -8,6 +8,7 @@ Rules:
 - If information is missing, say what is weak about the writing instead of inventing new facts.
 - The output should be about 25% comedy and 75% practical coaching.
 - The normalized resume must stay faithful to the uploaded resume. Do not add new facts.
+- Every array field must always be returned as a JSON array. Use [] when empty. Never return null, undefined, or omit array fields.
 
 Severity meanings:
 - cosmetic: annoying, but survivable
@@ -29,6 +30,7 @@ Return structured JSON with:
 - issues: 4 to 6 issues with category, severity, roast, diagnosis, and fix
 - upgradePitch: eyebrow, headline, and 3 to 4 bullets describing what the premium rewrite will improve
 - normalizedResume: a clean, faithful plain-text transcription of the resume content with sensible section breaks
+- wins, issues, and upgradePitch.points must always be arrays. If you have no items, return [].
 `.trim();
 }
 
@@ -41,6 +43,7 @@ Rules:
 - Improve the structure, action verbs, clarity, ATS readability, and polish.
 - Output the resume as premium but practical markdown that can be pasted into a doc editor.
 - Preserve the candidate's real experience, but tighten weak bullets and remove fluff.
+- Every array field must always be returned as a JSON array. Use [] when empty. Never return null, undefined, or omit array fields.
 `.trim();
 
 export function createRewriteUserPrompt() {
@@ -53,5 +56,6 @@ Return structured JSON with:
 - improvements: 3 to 5 concise bullets about what changed
 - polishedResume: the full rewritten resume as markdown
 - finalNote: one short coaching note about what the candidate should customize before sending
+- improvements must always be an array. If you have no items, return [].
 `.trim();
 }
