@@ -10,45 +10,54 @@ export const maxDuration = 60;
 
 const maxPdfSize = 5 * 1024 * 1024;
 
+function jsonError(message: string, status = 500) {
+  return Response.json({ error: message }, { status });
+}
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const resume = formData.get("resume");
 
     if (!(resume instanceof File)) {
-      return Response.json(
-        { error: "Upload a PDF resume to start the roast." },
-        { status: 400 },
-      );
+      return jsonError("Upload a PDF resume to start the roast.", 400);
     }
 
     const looksLikePdf =
       resume.type === "application/pdf" || resume.name.toLowerCase().endsWith(".pdf");
 
     if (!looksLikePdf) {
-      return Response.json(
-        { error: "RoastMyCV only accepts PDF resumes right now." },
-        { status: 400 },
-      );
+      return jsonError("RoastMyCV only accepts PDF resumes right now.", 400);
     }
 
     if (resume.size > maxPdfSize) {
-      return Response.json(
-        { error: "Keep the PDF under 5MB so the roast stays fast and deploy-safe." },
-        { status: 400 },
+      return jsonError(
+        "Keep the PDF under 5MB so the roast stays fast and deploy-safe.",
+        400,
       );
     }
 
     const buffer = Buffer.from(await resume.arrayBuffer());
-    const extractedResumeText = normalizeResumeText(await extractPdfText(buffer));
+    let extractedResumeText = "";
+
+    try {
+      extractedResumeText = normalizeResumeText(await extractPdfText(buffer));
+    } catch (pdfError) {
+      const message =
+        pdfError instanceof Error
+          ? pdfError.message
+          : "The PDF parser failed before text extraction finished.";
+
+      return jsonError(
+        `Could not read this PDF on the server. ${message}`,
+        400,
+      );
+    }
 
     if (!extractedResumeText) {
-      return Response.json(
-        {
-          error:
-            "I couldn't extract readable text from that PDF. Try a text-based export instead of an image-only scan.",
-        },
-        { status: 400 },
+      return jsonError(
+        "I couldn't extract readable text from that PDF. Try a text-based export instead of an image-only scan.",
+        400,
       );
     }
 
@@ -96,6 +105,6 @@ export async function POST(request: Request) {
         ? error.message
         : "The roast engine glitched. Try again in a second.";
 
-    return Response.json({ error: message }, { status: 500 });
+    return jsonError(message, 500);
   }
 }
