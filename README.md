@@ -6,7 +6,7 @@ RoastMyCV is a Next.js app that lets people upload a PDF resume, get a brutally 
 
 - Next.js 16 App Router
 - Tailwind CSS 4
-- OpenAI Responses API
+- Groq Chat Completions API
 - Stripe Checkout
 - Vercel-ready deployment
 
@@ -32,15 +32,15 @@ RoastMyCV is a Next.js app that lets people upload a PDF resume, get a brutally 
 
 Copy `.env.example` to `.env.local` and set:
 
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL` (optional, defaults to `gpt-5-mini`)
+- `GROQ_API_KEY`
+- `GROQ_MODEL` (optional, defaults to `llama-3.3-70b-versatile`)
 - `STRIPE_SECRET_KEY`
 - `NEXT_PUBLIC_APP_URL`
 
 ## Product flow
 
 1. User uploads a PDF resume.
-2. `/api/roast` sends the PDF to OpenAI for a structured roast and returns a normalized snapshot of the resume.
+2. `/api/roast` sends extracted resume text to Groq for a structured roast and returns a normalized snapshot of the resume.
 3. `/api/checkout` creates a Stripe Checkout Session for a one-time $2.99 payment.
 4. After Stripe redirects back, `/api/checkout/verify` confirms the paid session.
 5. `/api/rewrite` verifies the paid session matches the roasted resume snapshot, then generates the polished rewrite.

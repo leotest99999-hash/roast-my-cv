@@ -1,5 +1,4 @@
-import { zodTextFormat } from "openai/helpers/zod";
-import { defaultOpenAIModel, getOpenAIClient } from "@/lib/openai";
+import { createStructuredGroqCompletion } from "@/lib/groq";
 import { normalizeResumeText, sha256 } from "@/lib/hash";
 import { createRewriteUserPrompt, rewriteSystemPrompt } from "@/lib/prompts";
 import { rewriteResultSchema } from "@/lib/schemas";
@@ -57,37 +56,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const openai = getOpenAIClient();
-    const response = await openai.responses.parse({
-      model: defaultOpenAIModel,
-      input: [
-        {
-          role: "system",
-          content: [{ type: "input_text", text: rewriteSystemPrompt }],
-        },
-        {
-          role: "user",
-          content: [
-            { type: "input_text", text: createRewriteUserPrompt() },
-            {
-              type: "input_text",
-              text: `Resume snapshot:\n\n${normalizedResume}`,
-            },
-          ],
-        },
-      ],
-      text: {
-        format: zodTextFormat(rewriteResultSchema, "rewrite_result"),
-      },
+    const groqResult = await createStructuredGroqCompletion({
+      schema: rewriteResultSchema,
+      systemPrompt: rewriteSystemPrompt,
+      userPrompt: `${createRewriteUserPrompt()}\n\nResume snapshot:\n\n${normalizedResume}`,
     });
 
-    if (!response.output_parsed) {
-      throw new Error("The rewrite engine returned an empty response.");
-    }
-
     return Response.json({
-      ...response.output_parsed,
-      polishedResume: normalizeResumeText(response.output_parsed.polishedResume),
+      ...groqResult,
+      polishedResume: normalizeResumeText(groqResult.polishedResume),
     });
   } catch (error) {
     const message =

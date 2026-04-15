@@ -1,5 +1,4 @@
-import { zodTextFormat } from "openai/helpers/zod";
-import { defaultOpenAIModel, getOpenAIClient } from "@/lib/openai";
+import { createStructuredGroqCompletion } from "@/lib/groq";
 import { createRoastUserPrompt, roastSystemPrompt } from "@/lib/prompts";
 import { normalizeResumeText, sha256 } from "@/lib/hash";
 import { extractPdfText } from "@/lib/pdf";
@@ -61,41 +60,20 @@ export async function POST(request: Request) {
       );
     }
 
-    const openai = getOpenAIClient();
-
-    const response = await openai.responses.parse({
-      model: defaultOpenAIModel,
-      input: [
-        {
-          role: "system",
-          content: [{ type: "input_text", text: roastSystemPrompt }],
-        },
-        {
-          role: "user",
-          content: [
-            { type: "input_text", text: createRoastUserPrompt(resume.name) },
-            {
-              type: "input_text",
-              text: `Extracted resume text from ${resume.name}:\n\n${extractedResumeText}`,
-            },
-          ],
-        },
-      ],
-      text: {
-        format: zodTextFormat(roastAnalysisSchema, "roast_analysis"),
-      },
+    const groqResult = await createStructuredGroqCompletion({
+      schema: roastAnalysisSchema,
+      systemPrompt: roastSystemPrompt,
+      userPrompt: `${createRoastUserPrompt(
+        resume.name,
+      )}\n\nExtracted resume text from ${resume.name}:\n\n${extractedResumeText}`,
     });
 
-    if (!response.output_parsed) {
-      throw new Error("The roast engine came back empty-handed.");
-    }
-
     const normalizedResume = normalizeResumeText(
-      response.output_parsed.normalizedResume,
+      groqResult.normalizedResume,
     );
 
     return Response.json({
-      ...response.output_parsed,
+      ...groqResult,
       normalizedResume,
       resumeHash: sha256(normalizedResume),
     });
