@@ -1,35 +1,41 @@
 import { z } from "zod";
 
+const groqString = (min: number, max: number) =>
+  z
+    .union([z.string(), z.array(z.string())])
+    .transform((value) => (Array.isArray(value) ? value.join(" ") : value))
+    .pipe(z.string().min(min).max(max));
+
 export const roastIssueSchema = z.object({
-  category: z.string().min(2).max(2000),
+  category: groqString(2, 2000),
   severity: z.enum(["cosmetic", "messy", "critical"]),
-  roast: z.string().min(20).max(2000),
-  diagnosis: z.string().min(20).max(2000),
-  fix: z.string().min(20).max(2000),
+  roast: groqString(20, 2000),
+  diagnosis: groqString(20, 2000),
+  fix: groqString(20, 2000),
 });
 
 export const roastAnalysisSchema = z.object({
   score: z.number().int().min(0).max(100),
-  scoreLabel: z.string().min(2).max(2000),
-  lead: z.string().min(40).max(2000),
-  summary: z.string().min(40).max(2000),
-  standoutLine: z.string().min(20).max(2000),
-  wins: z.array(z.string().min(12).max(2000)).max(4).default([]),
+  scoreLabel: groqString(2, 2000),
+  lead: groqString(40, 2000),
+  summary: groqString(40, 2000),
+  standoutLine: groqString(20, 2000),
+  wins: z.array(groqString(12, 2000)).max(4).default([]),
   issues: z.array(roastIssueSchema).max(6).default([]),
   upgradePitch: z.object({
-    eyebrow: z.string().min(2).max(2000),
-    headline: z.string().min(16).max(2000),
-    points: z.array(z.string().min(12).max(2000)).max(4).default([]),
+    eyebrow: groqString(2, 2000),
+    headline: groqString(16, 2000),
+    points: z.array(groqString(12, 2000)).max(4).default([]),
   }),
-  normalizedResume: z.string().min(100).max(20000),
+  normalizedResume: groqString(100, 20000),
 });
 
 export const rewriteResultSchema = z.object({
-  title: z.string().min(10).max(2000),
-  positioning: z.string().min(30).max(2000),
-  improvements: z.array(z.string().min(12).max(2000)).max(5).default([]),
-  polishedResume: z.string().min(100).max(20000),
-  finalNote: z.string().min(20).max(2000),
+  title: groqString(10, 2000),
+  positioning: groqString(30, 2000),
+  improvements: z.array(groqString(12, 2000)).max(5).default([]),
+  polishedResume: groqString(100, 20000),
+  finalNote: groqString(20, 2000),
 });
 
 export type RoastIssue = z.infer<typeof roastIssueSchema>;
