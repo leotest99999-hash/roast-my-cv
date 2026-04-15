@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+:root {
+  --background: #050608;
+  --foreground: #f6efe8;
+  --muted: #b6aea5;
+  --muted-strong: #d9d0c8;
+  --panel: rgba(14, 16, 19, 0.72);
+  --panel-strong: rgba(14, 16, 19, 0.9);
+  --border: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.2);
+  --coral: #ff6b4a;
+  --lime: #c9ff63;
+  --gold: #ffc977;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-strong: var(--muted-strong);
+  --color-panel: var(--panel);
+  --color-panel-strong: var(--panel-strong);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-coral: var(--coral);
+  --color-lime: var(--lime);
+  --color-gold: var(--gold);
+  --font-sans: var(--font-space-grotesk);
+  --font-mono: var(--font-ibm-plex-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(255, 107, 74, 0.16), transparent 36%),
+    radial-gradient(circle at top right, rgba(201, 255, 99, 0.12), transparent 28%),
+    radial-gradient(circle at center, rgba(255, 201, 119, 0.08), transparent 42%),
+    linear-gradient(180deg, #090b0e 0%, #050608 58%, #030406 100%);
+  color: var(--foreground);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(circle at center, black 48%, transparent 92%);
+  opacity: 0.4;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(255, 107, 74, 0.32);
+  color: #fff8f3;
+}
+
+.poster-shell {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.05), transparent 35%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01)),
+    var(--panel);
+  backdrop-filter: blur(22px);
+  box-shadow:
+    0 28px 90px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.poster-shell::after {
+  content: "";
+  position: absolute;
+  inset: auto -10% -32% auto;
+  width: 220px;
+  height: 220px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 107, 74, 0.18), transparent 65%);
+  pointer-events: none;
+}
+
+.scan-glow {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.scan-glow::after {
+  content: "";
+  position: absolute;
+  inset: -10% 0 auto;
+  height: 28%;
+  background: linear-gradient(
+    180deg,
+    rgba(201, 255, 99, 0),
+    rgba(201, 255, 99, 0.16),
+    rgba(201, 255, 99, 0)
+  );
+  filter: blur(6px);
+  animation: scan-drift 6s ease-in-out infinite;
+}
+
+.eyebrow {
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.noise-line {
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.12) 10%,
+    rgba(255, 255, 255, 0.28) 50%,
+    rgba(255, 255, 255, 0.12) 90%,
+    transparent 100%
+  );
+}
+
+@keyframes scan-drift {
+  0%,
+  100% {
+    transform: translateY(-30%);
+    opacity: 0.3;
+  }
+
+  50% {
+    transform: translateY(240%);
+    opacity: 1;
+  }
+}
