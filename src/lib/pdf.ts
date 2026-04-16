@@ -1,7 +1,10 @@
+import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 import type { Output, Text } from "pdf2json";
 
 const pdfHeader = [0x25, 0x50, 0x44, 0x46, 0x2d] as const;
 const pdfHeaderSearchWindow = 1024;
+const require = createRequire(import.meta.url);
 
 export class PdfExtractionError extends Error {
   constructor(message: string) {
@@ -90,7 +93,9 @@ async function ensurePdfJsNodePolyfills() {
 async function extractTextWithPdfJsDist(uint8Array: Uint8Array) {
   await ensurePdfJsNodePolyfills();
   const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  pdfjsLib.GlobalWorkerOptions.workerSrc = "";
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pathToFileURL(
+    require.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs"),
+  ).toString();
 
   const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
   const pdf = await loadingTask.promise;
