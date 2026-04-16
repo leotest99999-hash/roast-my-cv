@@ -10,10 +10,17 @@ import {
   Flame,
   LoaderCircle,
   Share2,
+  Shield,
   Sparkles,
   TriangleAlert,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+  isOwnerPreviewMode,
+  ownerPreviewModeStorageKey,
+  type OwnerPreviewMode,
+} from "@/lib/owner-preview";
 import type {
   CheckoutVerificationResult,
   PremiumProduct,
@@ -101,6 +108,67 @@ const coverLetterPreviewLines = [
   "That is exactly why this role stands out: it rewards people who can bring order to messy information and make it read like impact.",
   "I would bring the same sharper positioning from the rewrite into a cover letter that actually sounds like a person.",
 ] as const;
+const ownerPreviewOptions: Array<{
+  mode: OwnerPreviewMode;
+  label: string;
+  description: string;
+}> = [
+  {
+    mode: "actual",
+    label: "Actual",
+    description: "Show the real live state for this browser.",
+  },
+  {
+    mode: "unpaid",
+    label: "Unpaid",
+    description: "Hide premium unlocks so you can review the paywall flow.",
+  },
+  {
+    mode: "rewrite_paid",
+    label: "Rewrite",
+    description: "Preview the rewrite-unlocked state without charging anything.",
+  },
+  {
+    mode: "full_paid",
+    label: "Full premium",
+    description: "Preview rewrite plus cover letter as if everything was purchased.",
+  },
+];
+const ownerPreviewRewriteSample: RewriteResult = {
+  title: "Sharper, ATS-ready rewrite",
+  positioning:
+    "This preview version shows the kind of cleaner positioning, stronger verbs, and tighter structure the paid unlock is meant to reveal.",
+  improvements: [
+    "Lead with role-defining strengths instead of generic personality traits.",
+    "Turn soft responsibility bullets into outcome-driven statements.",
+    "Keep the layout plain enough for ATS while still sounding premium.",
+    "Use placeholders only where real metrics still need to be added.",
+  ],
+  polishedResume: `# Candidate Name
+
+## Summary
+Operations-minded professional with experience organizing cross-functional work, tightening processes, and improving day-to-day execution. Known for turning vague responsibilities into clear ownership, readable structure, and stronger business communication.
+
+## Experience
+- Coordinated multi-step projects across internal teams, keeping deliverables aligned to deadlines and stakeholder expectations.
+- Improved documentation and workflow clarity so recurring tasks were easier to hand off, track, and complete accurately.
+- Supported reporting, scheduling, and follow-through across fast-moving priorities while maintaining a high standard of detail.
+
+## Skills
+- Project coordination
+- Process improvement
+- Stakeholder communication
+- Reporting and documentation`,
+  finalNote:
+    "Before sending, swap in exact metrics, tools, and outcomes wherever you can prove them.",
+};
+const ownerPreviewCoverLetterSample = `Dear Hiring Team,
+
+Your role stands out because it calls for someone who can turn messy information into clear, useful action. That has been a recurring theme in my work, whether I was coordinating priorities, tightening documentation, or helping teams move faster with better structure.
+
+I am strongest when expectations are high and the details matter. I bring a practical writing style, strong follow-through, and a bias toward making work easier to understand, easier to hand off, and easier to trust. That combination is exactly what I would bring to this role.
+
+I would welcome the chance to contribute that same clarity and execution to your team. Thank you for your time and consideration.`;
 const primaryButtonClass =
   "inline-flex w-full items-center justify-center gap-2 rounded-full border border-coral/40 bg-coral px-5 py-3 text-sm font-semibold text-[#180f0a] transition hover:bg-[#ff7f65] sm:w-auto disabled:cursor-not-allowed disabled:opacity-45";
 const secondaryButtonClass =
@@ -203,6 +271,9 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
   const [resumeName, setResumeName] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [emailSubmitted, setEmailSubmitted] = useState(false);
+  const [ownerPreviewEnabled, setOwnerPreviewEnabled] = useState(false);
+  const [ownerPreviewMode, setOwnerPreviewMode] =
+    useState<OwnerPreviewMode>("actual");
   const [analysis, setAnalysis] = useState<RoastResult | null>(null);
   const [rewrite, setRewrite] = useState<RewriteResult | null>(null);
   const [coverLetter, setCoverLetter] = useState<string | null>(null);
@@ -228,6 +299,9 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
     try {
       const raw = window.localStorage.getItem(storageKey);
       const storedEmail = window.localStorage.getItem(emailStorageKey);
+      const storedOwnerPreviewMode = window.localStorage.getItem(
+        ownerPreviewModeStorageKey,
+      );
       if (raw) {
         const stored = JSON.parse(raw) as StoredSession;
         setAnalysis(stored.analysis ?? null);
@@ -241,6 +315,13 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
       if (storedEmail) {
         setEmail(storedEmail);
         setEmailSubmitted(true);
+      }
+
+      if (
+        storedOwnerPreviewMode &&
+        isOwnerPreviewMode(storedOwnerPreviewMode)
+      ) {
+        setOwnerPreviewMode(storedOwnerPreviewMode);
       }
     } catch {
       window.localStorage.removeItem(storageKey);
@@ -274,6 +355,65 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
     resumeName,
     rewrite,
   ]);
+
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadOwnerPreviewStatus() {
+      try {
+        const response = await fetch("/api/owner-preview", {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("Owner preview check failed.");
+        }
+
+        const payload = (await response.json()) as { enabled: boolean };
+        if (cancelled) {
+          return;
+        }
+
+        setOwnerPreviewEnabled(payload.enabled);
+
+        if (!payload.enabled) {
+          setOwnerPreviewMode("actual");
+          window.localStorage.removeItem(ownerPreviewModeStorageKey);
+        }
+      } catch {
+        if (cancelled) {
+          return;
+        }
+
+        setOwnerPreviewEnabled(false);
+        setOwnerPreviewMode("actual");
+        window.localStorage.removeItem(ownerPreviewModeStorageKey);
+      }
+    }
+
+    void loadOwnerPreviewStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+
+    if (!ownerPreviewEnabled) {
+      window.localStorage.removeItem(ownerPreviewModeStorageKey);
+      return;
+    }
+
+    window.localStorage.setItem(ownerPreviewModeStorageKey, ownerPreviewMode);
+  }, [hydrated, ownerPreviewEnabled, ownerPreviewMode]);
 
   useEffect(() => {
     return () => {
@@ -819,16 +959,46 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
     isRewriting ||
     isGeneratingCoverLetter;
   const paidUnlocked = Boolean(paidSessionId);
+  const ownerForcesUnpaid =
+    ownerPreviewEnabled && ownerPreviewMode === "unpaid";
+  const ownerForcesRewriteUnlocked =
+    ownerPreviewEnabled &&
+    (ownerPreviewMode === "rewrite_paid" || ownerPreviewMode === "full_paid");
+  const ownerForcesFullPremium =
+    ownerPreviewEnabled && ownerPreviewMode === "full_paid";
+  const effectivePaidUnlocked = ownerForcesUnpaid
+    ? false
+    : ownerForcesRewriteUnlocked
+      ? true
+      : paidUnlocked;
+  const effectiveCoverLetterUnlocked = ownerForcesUnpaid
+    ? false
+    : ownerForcesFullPremium
+      ? true
+      : Boolean(coverLetterSessionId);
+  const usingPreviewRewriteSample =
+    ownerForcesRewriteUnlocked && !rewrite;
+  const usingPreviewCoverLetterSample =
+    ownerForcesFullPremium && !coverLetter;
+  const visibleRewrite = ownerForcesUnpaid
+    ? null
+    : rewrite ?? (ownerForcesRewriteUnlocked ? ownerPreviewRewriteSample : null);
+  const visibleCoverLetter = ownerForcesUnpaid
+    ? null
+    : coverLetter ??
+      (ownerForcesFullPremium ? ownerPreviewCoverLetterSample : null);
+  const canRequestRewrite = Boolean(paidSessionId);
+  const canRequestCoverLetter = Boolean(coverLetterSessionId);
   const shouldShowEmailGate =
     Boolean(analysis) &&
     !emailSubmitted &&
-    !paidUnlocked &&
-    !coverLetterSessionId;
+    !effectivePaidUnlocked &&
+    !effectiveCoverLetterUnlocked;
   const liveBeforePreview = formatPreviewLine(
     analysis ? pickPreviewLine(analysis.normalizedResume) : null,
   );
   const liveAfterPreview = formatPreviewLine(
-    rewrite ? pickPreviewLine(rewrite.polishedResume) : null,
+    visibleRewrite ? pickPreviewLine(visibleRewrite.polishedResume) : null,
   );
 
   return (
@@ -994,7 +1164,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                   <button
                     type="button"
                     className={secondaryButtonClass}
-                    disabled={!analysis || isBusy}
+                    disabled={!analysis || isBusy || effectivePaidUnlocked}
                     onClick={() => void handleCheckout("polished_rewrite")}
                   >
                     {isCheckingOut ? (
@@ -1002,10 +1172,19 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                         <LoaderCircle className="h-4 w-4 animate-spin" />
                         Opening Stripe...
                       </>
-                    ) : paidUnlocked ? (
+                    ) : effectivePaidUnlocked ? (
                       <>
-                        <Check className="h-4 w-4" />
-                        Rewrite unlocked
+                        {paidUnlocked ? (
+                          <>
+                            <Check className="h-4 w-4" />
+                            Rewrite unlocked
+                          </>
+                        ) : (
+                          <>
+                            <Shield className="h-4 w-4" />
+                            Rewrite preview on
+                          </>
+                        )}
                       </>
                     ) : (
                       <>
@@ -1309,7 +1488,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
               </div>
 
               <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                {!paidUnlocked ? (
+                {!effectivePaidUnlocked ? (
                   <button
                     type="button"
                     className={primaryButtonClass}
@@ -1332,7 +1511,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                   <button
                     type="button"
                     className={primaryButtonClass}
-                    disabled={!analysis || isBusy}
+                    disabled={!analysis || isBusy || !canRequestRewrite}
                     onClick={() => {
                       if (paidSessionId) {
                         void requestRewrite(paidSessionId);
@@ -1355,7 +1534,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                 <button
                   type="button"
                   className={secondaryButtonClass}
-                  disabled={!rewrite}
+                  disabled={!visibleRewrite || usingPreviewRewriteSample}
                   onClick={handleCopy}
                 >
                   {didCopy ? (
@@ -1370,11 +1549,11 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                     </>
                   )}
                 </button>
-                {rewrite && (
+                {visibleRewrite && (
                   <button
                     type="button"
                     className={secondaryButtonClass}
-                    disabled={isDownloadingPdf}
+                    disabled={isDownloadingPdf || usingPreviewRewriteSample}
                     onClick={() => void handleDownloadPdf()}
                   >
                     {isDownloadingPdf ? (
@@ -1391,11 +1570,17 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                   </button>
                 )}
               </div>
+              {ownerPreviewEnabled && ownerPreviewMode !== "actual" && (
+                <p className="mt-4 text-sm leading-7 text-muted">
+                  Owner preview is changing this section only for your browser. It does not
+                  create a fake Stripe session or run premium generation by itself.
+                </p>
+              )}
             </div>
 
             <div className="space-y-4 sm:space-y-5">
               <div className="poster-shell rounded-[30px] p-5 sm:rounded-[34px] sm:p-7">
-                {!rewrite ? (
+                {!visibleRewrite ? (
                   <div className="space-y-5">
                     <p className="text-xl font-semibold tracking-tight sm:text-2xl">
                       The premium version appears here after payment.
@@ -1412,12 +1597,16 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                   <div className="space-y-6">
                     <div className="space-y-3">
                       <p className="eyebrow">Unlocked rewrite</p>
-                      <h3 className="text-2xl font-semibold tracking-tight sm:text-3xl">{rewrite.title}</h3>
-                      <p className="text-base leading-8 text-muted">{rewrite.positioning}</p>
+                      <h3 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                        {visibleRewrite.title}
+                      </h3>
+                      <p className="text-base leading-8 text-muted">
+                        {visibleRewrite.positioning}
+                      </p>
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                      {rewrite.improvements.map((improvement) => (
+                      {visibleRewrite.improvements.map((improvement) => (
                         <div
                           key={improvement}
                           className="rounded-[22px] border border-lime/16 bg-lime/8 p-4 text-sm leading-7 text-foreground/88"
@@ -1429,18 +1618,24 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
 
                     <div className="rounded-[24px] border border-white/10 bg-black/18 p-4 sm:rounded-[28px] sm:p-5">
                       <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[13px] leading-7 text-foreground/90">
-                        {rewrite.polishedResume}
+                        {visibleRewrite.polishedResume}
                       </pre>
                     </div>
 
                     <div className="rounded-[22px] border border-white/10 bg-white/4 p-4 text-sm leading-7 text-muted">
-                      {rewrite.finalNote}
+                      {visibleRewrite.finalNote}
                     </div>
+                    {usingPreviewRewriteSample && (
+                      <div className="rounded-[22px] border border-gold/18 bg-gold/10 p-4 text-sm leading-7 text-gold">
+                        Owner preview is showing a sample rewrite here so you can inspect the
+                        unlocked layout before paying.
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
-              {rewrite && !coverLetterSessionId && (
+              {visibleRewrite && !effectiveCoverLetterUnlocked && (
                 <div className="poster-shell rounded-[30px] p-5 sm:rounded-[34px] sm:p-7">
                   <div className="grid gap-6 lg:grid-cols-[0.52fr_0.48fr]">
                     <div className="space-y-5">
@@ -1471,7 +1666,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                         <button
                           type="button"
                           className={primaryButtonClass}
-                          disabled={isBusy}
+                          disabled={isBusy || ownerForcesFullPremium}
                           onClick={() => void handleCheckout("cover_letter")}
                         >
                           {isCheckingOut ? (
@@ -1487,7 +1682,8 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                           )}
                         </button>
                         <p className="text-sm leading-7 text-muted">
-                          Same resume snapshot. No corporate “I am writing to apply” opener.
+                          Same resume snapshot. No corporate &quot;I am writing to
+                          apply&quot; opener.
                         </p>
                       </div>
                     </div>
@@ -1509,9 +1705,9 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                 </div>
               )}
 
-              {rewrite && coverLetterSessionId && (
+              {visibleRewrite && effectiveCoverLetterUnlocked && (
                 <div id="cover-letter" className="poster-shell rounded-[30px] p-5 sm:rounded-[34px] sm:p-7">
-                  {!coverLetter ? (
+                  {!visibleCoverLetter ? (
                     <div className="space-y-5">
                       <div className="space-y-3">
                         <p className="eyebrow">Matching cover letter</p>
@@ -1531,7 +1727,12 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                         <button
                           type="button"
                           className={primaryButtonClass}
-                          onClick={() => void requestCoverLetter(coverLetterSessionId)}
+                          disabled={!canRequestCoverLetter}
+                          onClick={() => {
+                            if (coverLetterSessionId) {
+                              void requestCoverLetter(coverLetterSessionId);
+                            }
+                          }}
                         >
                           <Sparkles className="h-4 w-4" />
                           Generate cover letter
@@ -1550,6 +1751,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                         <button
                           type="button"
                           className={secondaryButtonClass}
+                          disabled={usingPreviewCoverLetterSample}
                           onClick={handleCopyCoverLetter}
                         >
                           {didCopyCoverLetter ? (
@@ -1568,9 +1770,15 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
 
                       <div className="rounded-[24px] border border-white/10 bg-black/18 p-4 sm:rounded-[28px] sm:p-5">
                         <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[13px] leading-7 text-foreground/90">
-                          {coverLetter}
+                          {visibleCoverLetter}
                         </pre>
                       </div>
+                      {usingPreviewCoverLetterSample && (
+                        <div className="rounded-[22px] border border-gold/18 bg-gold/10 p-4 text-sm leading-7 text-gold">
+                          Owner preview is showing a sample cover letter here so you can inspect
+                          the full-premium state before paying.
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1578,6 +1786,60 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
             </div>
           </div>
         </section>
+
+        {ownerPreviewEnabled && (
+          <div className="fixed bottom-4 right-4 z-40 w-[min(22rem,calc(100vw-2rem))]">
+            <div className="poster-shell rounded-[28px] p-4 sm:p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="eyebrow text-[11px]">Owner Preview</p>
+                  <p className="mt-2 text-lg font-semibold tracking-tight">
+                    Private state switcher
+                  </p>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-lime/18 bg-lime/10 text-lime">
+                  <Shield className="h-4 w-4" />
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-2">
+                {ownerPreviewOptions.map((option) => {
+                  const isActive = ownerPreviewMode === option.mode;
+
+                  return (
+                    <button
+                      key={option.mode}
+                      type="button"
+                      className={`rounded-[20px] border p-3 text-left transition ${
+                        isActive
+                          ? "border-lime/25 bg-lime/10"
+                          : "border-white/10 bg-white/4 hover:border-white/18 hover:bg-white/7"
+                      }`}
+                      onClick={() => setOwnerPreviewMode(option.mode)}
+                    >
+                      <p className="text-sm font-semibold text-foreground">{option.label}</p>
+                      <p className="mt-1 text-xs leading-6 text-muted">
+                        {option.description}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs leading-6 text-muted">
+                  Only this browser sees the forced state.
+                </p>
+                <Link
+                  href="/owner-preview"
+                  className="text-sm font-semibold text-lime transition hover:text-foreground"
+                >
+                  Manage access
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );

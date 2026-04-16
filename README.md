@@ -38,6 +38,7 @@ Copy `.env.example` to `.env.local` and set:
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - `BLOB_READ_WRITE_TOKEN`
+- `OWNER_PREVIEW_TOKEN` (optional, enables the hidden owner-only preview toggle at `/owner-preview`)
 - `NEXT_PUBLIC_APP_URL`
 
 ## Product flow
@@ -55,6 +56,7 @@ Copy `.env.example` to `.env.local` and set:
 - The paid rewrite is intentionally tied to the exact roasted snapshot from the free analysis.
 - Premium unlocks now persist server-side. Local development falls back to `.data/premium-unlocks` if `BLOB_READ_WRITE_TOKEN` is not set.
 - The upload is limited to PDFs under 5MB so the app stays fast and deployment-safe.
+- If `OWNER_PREVIEW_TOKEN` is set, you can unlock a private owner-only preview panel at `/owner-preview` and force unpaid or paid UI states on your own browser without changing the experience for anyone else.
 
 ## Verification
 
