@@ -1,3 +1,5 @@
+import type { Output, Text } from "pdf2json";
+
 const pdfHeader = [0x25, 0x50, 0x44, 0x46, 0x2d] as const;
 const pdfHeaderSearchWindow = 1024;
 
@@ -75,16 +77,31 @@ export async function extractPdfText(
   }
 
   try {
-    const pdfParse = (await import("pdf-parse/lib/pdf-parse.js")).default;
+    const { default: PDFParser } = await import("pdf2json");
+    const PDFParserWithRawText = PDFParser as unknown as new (
+      context: null,
+      needRawText: number,
+    ) => InstanceType<typeof PDFParser>;
     let text = "";
 
     try {
-      const result = await pdfParse(Buffer.from(arrayBuffer));
-      text = typeof result?.text === "string" ? result.text : "";
+      const pdfParser = new PDFParserWithRawText(null, 1);
+      const parsed = await new Promise<Output>((resolve, reject) => {
+        pdfParser.on("pdfParser_dataReady", resolve);
+        pdfParser.on("pdfParser_dataError", (err) =>
+          reject(err instanceof Error ? err : err.parserError),
+        );
+        pdfParser.parseBuffer(Buffer.from(arrayBuffer));
+      });
+      text = parsed.Pages.flatMap((page) =>
+        page.Texts.map((textItem: Text) =>
+          decodeURIComponent(textItem.R[0]?.T ?? ""),
+        ),
+      ).join(" ");
     } catch (error) {
       const details = getErrorDetails(error);
 
-      console.error("[pdf] pdf-parse extraction failed", {
+      console.error("[pdf] pdf2json extraction failed", {
         fileName: options.fileName ?? null,
         arrayBufferByteLength: arrayBuffer.byteLength,
         uint8ArrayLength: uint8Array.length,
