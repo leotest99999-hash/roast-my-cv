@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowRight,
   BadgeDollarSign,
   Check,
   Clipboard,
@@ -48,6 +49,58 @@ const roastLoadingMessages = [
   "Checking the ATS damage...",
   "Almost done roasting...",
 ] as const;
+const heroTrustPoints = [
+  "No signup",
+  "PDF only",
+  "Roast in under 30 seconds",
+] as const;
+const howItWorksSteps = [
+  {
+    number: "01",
+    title: "Drop in the PDF",
+    body: "Upload the resume exactly as you send it now, awkward formatting and all.",
+  },
+  {
+    number: "02",
+    title: "Get the free roast",
+    body: "The app calls out weak verbs, vague buzzwords, ATS misses, and layout crimes.",
+  },
+  {
+    number: "03",
+    title: "Unlock the glow-up",
+    body: "Pay once and get a tighter rewrite plus a matching cover letter if you want it.",
+  },
+] as const;
+const proofExamples = [
+  {
+    label: "Weak verbs become sharper",
+    before: "Responsible for managing marketing campaigns across social channels.",
+    after:
+      "Directed multi-channel marketing campaigns across LinkedIn, Instagram, and email to keep launches on schedule and visible.",
+  },
+  {
+    label: "Buzzwords turn into substance",
+    before: "Results-driven team player with excellent communication skills and a passion for innovation.",
+    after:
+      "Cross-functional operator who kept launches moving by aligning design, ops, and stakeholders on deadlines and deliverables.",
+  },
+  {
+    label: "ATS-hostile formatting gets cleaned up",
+    before: "Dense paragraphs, decorative symbols, and headings that a parser can barely read.",
+    after:
+      "Straightforward section labels, plain text hierarchy, and bullets that survive both recruiters and software.",
+  },
+] as const;
+const coverLetterSellingPoints = [
+  "Built from the same rewrite you already unlocked.",
+  "Three short paragraphs with a confident, specific opener.",
+  "Easy to customize for company name, role, and mission.",
+] as const;
+const coverLetterPreviewLines = [
+  "I like roles where the work has to be clear, measurable, and useful on day one.",
+  "That is exactly why this role stands out: it rewards people who can bring order to messy information and make it read like impact.",
+  "I would bring the same sharper positioning from the rewrite into a cover letter that actually sounds like a person.",
+] as const;
 const primaryButtonClass =
   "inline-flex w-full items-center justify-center gap-2 rounded-full border border-coral/40 bg-coral px-5 py-3 text-sm font-semibold text-[#180f0a] transition hover:bg-[#ff7f65] sm:w-auto disabled:cursor-not-allowed disabled:opacity-45";
 const secondaryButtonClass =
@@ -85,6 +138,38 @@ function getAtsScoreClassName(atsScore: number) {
   }
 
   return "text-lime";
+}
+
+function pickPreviewLine(text: string) {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return (
+    lines.find((line) => /^[-*]\s+/.test(line)) ??
+    lines.find(
+      (line) =>
+        !line.startsWith("#") &&
+        !line.endsWith(":") &&
+        line.length >= 44,
+    ) ??
+    null
+  );
+}
+
+function formatPreviewLine(text: string | null, maxLength = 180) {
+  if (!text) {
+    return null;
+  }
+
+  const normalizedText = text.replace(/^[-*]\s+/, "").trim();
+
+  if (normalizedText.length <= maxLength) {
+    return normalizedText;
+  }
+
+  return `${normalizedText.slice(0, maxLength).trimEnd()}...`;
 }
 
 function IssueRow({ issue }: { issue: RoastIssue }) {
@@ -739,6 +824,12 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
     !emailSubmitted &&
     !paidUnlocked &&
     !coverLetterSessionId;
+  const liveBeforePreview = formatPreviewLine(
+    analysis ? pickPreviewLine(analysis.normalizedResume) : null,
+  );
+  const liveAfterPreview = formatPreviewLine(
+    rewrite ? pickPreviewLine(rewrite.polishedResume) : null,
+  );
 
   return (
     <main className="relative overflow-hidden">
@@ -761,42 +852,83 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
 
         <section className="grid items-start gap-8 pt-2 sm:gap-10 sm:pt-4 lg:grid-cols-[1.08fr_0.92fr] lg:pt-10">
           <div className="space-y-8">
-            <div className="space-y-6">
-              <p className="eyebrow">Dark mode career intervention</p>
-              <h1 className="max-w-4xl text-4xl font-semibold leading-[0.94] tracking-[-0.06em] sm:text-6xl sm:leading-none lg:text-8xl">
-                Roast your resume for free.
-                <span className="block text-coral">Pay $2.99 for the glow-up.</span>
-              </h1>
-              <p className="max-w-2xl text-lg leading-8 text-muted md:text-xl">
-                Upload a PDF and get a brutally funny, sharply useful teardown of bad formatting,
-                cliches, weak verbs, and bullets that say absolutely nothing. If the roast lands,
-                unlock a polished rewrite that sounds hireable.
-              </p>
-            </div>
+            <div className="poster-shell rounded-[34px] px-5 py-6 sm:px-7 sm:py-8 lg:px-9 lg:py-10">
+              <div className="relative space-y-7">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="eyebrow rounded-full border border-white/10 bg-white/6 px-3 py-2 text-[11px]">
+                    Dark mode career intervention
+                  </span>
+                  <span className="rounded-full border border-lime/20 bg-lime/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-lime">
+                    Free roast first
+                  </span>
+                </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="poster-shell rounded-[28px] p-5">
-                <p className="eyebrow text-[11px]">What gets roasted</p>
-                <p className="mt-3 text-lg font-semibold">
-                  Formatting crimes, ATS misses, empty buzzwords.
-                </p>
-              </div>
-              <div className="poster-shell rounded-[28px] p-5">
-                <p className="eyebrow text-[11px]">Why people pay</p>
-                <p className="mt-3 text-lg font-semibold">
-                  The rewrite keeps your facts and fixes the execution.
-                </p>
-              </div>
-              <div className="poster-shell rounded-[28px] p-5">
-                <p className="eyebrow text-[11px]">MVP rule</p>
-                <p className="mt-3 text-lg font-semibold">
-                  The paid unlock is tied to the exact roasted snapshot.
-                </p>
+                <div className="space-y-5">
+                  <h1 className="max-w-5xl text-4xl font-semibold leading-[0.92] tracking-[-0.07em] sm:text-6xl sm:leading-none lg:text-[5.5rem]">
+                    Find out why your resume feels
+                    <span className="block text-coral">forgettable in 30 seconds.</span>
+                  </h1>
+                  <p className="max-w-2xl text-lg leading-8 text-muted md:text-xl">
+                    Upload the PDF you actually send to employers. RoastMyCV tears into
+                    weak verbs, empty buzzwords, missing metrics, ATS-hostile formatting,
+                    and bullets that somehow say nothing. Then it offers the $2.99 glow-up.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
+                  <a href="#upload-studio" className={primaryButtonClass}>
+                    Drop a PDF now
+                    <ArrowRight className="h-4 w-4" />
+                  </a>
+                  <a
+                    href="#proof-lab"
+                    className="text-sm font-semibold text-muted transition hover:text-foreground"
+                  >
+                    See what gets fixed
+                  </a>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {heroTrustPoints.map((point) => (
+                    <span
+                      key={point}
+                      className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-muted-strong"
+                    >
+                      {point}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="noise-line" />
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="rounded-[24px] border border-white/10 bg-black/18 p-4">
+                    <p className="eyebrow text-[11px]">What gets roasted</p>
+                    <p className="mt-3 text-lg font-semibold">
+                      Weak verbs, ATS misses, weird formatting, fluff.
+                    </p>
+                  </div>
+                  <div className="rounded-[24px] border border-white/10 bg-black/18 p-4">
+                    <p className="eyebrow text-[11px]">Why people pay</p>
+                    <p className="mt-3 text-lg font-semibold">
+                      The rewrite keeps your facts and changes the execution.
+                    </p>
+                  </div>
+                  <div className="rounded-[24px] border border-white/10 bg-black/18 p-4">
+                    <p className="eyebrow text-[11px]">Built for trust</p>
+                    <p className="mt-3 text-lg font-semibold">
+                      One clear path: roast free, then unlock the glow-up.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <section className="poster-shell rounded-[30px] p-5 sm:rounded-[34px] sm:p-6 md:p-8">
+          <section
+            id="upload-studio"
+            className="poster-shell rounded-[30px] p-5 sm:rounded-[34px] sm:p-6 md:p-8"
+          >
             <div className="scan-glow" />
             <div className="relative space-y-6">
               <div className="space-y-3">
@@ -805,7 +937,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                   Start with the free roast.
                 </h2>
                 <p className="text-sm leading-7 text-muted">
-                  PDF only. No account wall. Just direct emotional damage and useful fixes.
+                  PDF only. No signup wall. Just direct emotional damage and useful fixes.
                 </p>
               </div>
 
@@ -923,6 +1055,64 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
           </section>
         </section>
 
+        <section className="grid gap-6 lg:grid-cols-[0.34fr_0.66fr]">
+          <div className="space-y-3">
+            <p className="eyebrow">How it works</p>
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
+              One flow. Zero guesswork.
+            </h2>
+            <p className="max-w-lg text-base leading-8 text-muted">
+              A good landing page should answer the first questions fast: what this does,
+              what happens next, and why the paid version is worth it.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            {howItWorksSteps.map((step) => (
+              <div key={step.number} className="poster-shell rounded-[28px] p-5">
+                <p className="font-mono text-sm tracking-[0.24em] text-coral">{step.number}</p>
+                <h3 className="mt-4 text-xl font-semibold tracking-tight">{step.title}</h3>
+                <p className="mt-3 text-sm leading-7 text-muted">{step.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section id="proof-lab" className="space-y-8">
+          <div className="space-y-3">
+            <p className="eyebrow">Proof Of Output</p>
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
+              What gets fixed, in plain sight.
+            </h2>
+            <p className="max-w-2xl text-base leading-8 text-muted">
+              Instead of vague “AI optimization,” the page now shows the exact kinds of
+              changes the paid rewrite is supposed to make.
+            </p>
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-3">
+            {proofExamples.map((example) => (
+              <article key={example.label} className="poster-shell rounded-[30px] p-5 sm:p-6">
+                <p className="eyebrow text-[11px]">{example.label}</p>
+                <div className="mt-5 space-y-4">
+                  <div className="rounded-[22px] border border-coral/18 bg-coral/8 p-4">
+                    <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-coral">
+                      Before
+                    </p>
+                    <p className="mt-3 text-sm leading-7 text-foreground/84">{example.before}</p>
+                  </div>
+                  <div className="rounded-[22px] border border-lime/18 bg-lime/8 p-4">
+                    <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-lime">
+                      After
+                    </p>
+                    <p className="mt-3 text-sm leading-7 text-foreground/92">{example.after}</p>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section className="space-y-8">
           <div className="space-y-3">
             <p className="eyebrow">Free analysis</p>
@@ -1036,6 +1226,52 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
               </div>
             </div>
           )}
+        </section>
+
+        <section className="grid gap-5 lg:grid-cols-[0.34fr_0.66fr]">
+          <div className="space-y-3">
+            <p className="eyebrow">Before Vs After</p>
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
+              The paid glow-up should feel obvious.
+            </h2>
+            <p className="max-w-lg text-base leading-8 text-muted">
+              People convert faster when they can see the shape of the upgrade. This block
+              shows the “before” energy against the “after” version the app is aiming for.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="poster-shell rounded-[30px] p-5 sm:p-6">
+              <p className="eyebrow text-[11px]">Before</p>
+              <p className="mt-4 text-xl font-semibold tracking-tight text-coral">
+                Reads like effort, not impact.
+              </p>
+              <div className="mt-5 rounded-[22px] border border-coral/18 bg-coral/8 p-4">
+                <p className="font-mono text-[13px] leading-7 text-foreground/84">
+                  {liveBeforePreview ?? proofExamples[0].before}
+                </p>
+              </div>
+              <p className="mt-4 text-sm leading-7 text-muted">
+                Too generic, too soft, and not nearly specific enough to survive a skim.
+              </p>
+            </div>
+
+            <div className="poster-shell rounded-[30px] p-5 sm:p-6">
+              <p className="eyebrow text-[11px]">After</p>
+              <p className="mt-4 text-xl font-semibold tracking-tight text-lime">
+                Sounds sharper, cleaner, and more hireable.
+              </p>
+              <div className="mt-5 rounded-[22px] border border-lime/18 bg-lime/8 p-4">
+                <p className="font-mono text-[13px] leading-7 text-foreground/92">
+                  {liveAfterPreview ?? proofExamples[0].after}
+                </p>
+              </div>
+              <p className="mt-4 text-sm leading-7 text-muted">
+                Better verbs, clearer positioning, and enough structure to help both ATS and
+                recruiters keep reading.
+              </p>
+            </div>
+          </div>
         </section>
 
         <section id="premium-rewrite" className="space-y-8 pb-10">
@@ -1206,32 +1442,69 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
 
               {rewrite && !coverLetterSessionId && (
                 <div className="poster-shell rounded-[30px] p-5 sm:rounded-[34px] sm:p-7">
-                  <div className="space-y-4">
-                    <p className="eyebrow">One more thing</p>
-                    <h3 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                      Want a matching cover letter?
-                    </h3>
-                    <p className="text-base leading-8 text-muted">
-                      We already know your resume. A tailored cover letter takes 10 seconds and costs $1.99.
-                    </p>
-                    <button
-                      type="button"
-                      className={primaryButtonClass}
-                      disabled={isBusy}
-                      onClick={() => void handleCheckout("cover_letter")}
-                    >
-                      {isCheckingOut ? (
-                        <>
-                          <LoaderCircle className="h-4 w-4 animate-spin" />
-                          Opening Stripe...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="h-4 w-4" />
-                          Get cover letter - $1.99
-                        </>
-                      )}
-                    </button>
+                  <div className="grid gap-6 lg:grid-cols-[0.52fr_0.48fr]">
+                    <div className="space-y-5">
+                      <div className="space-y-3">
+                        <p className="eyebrow">One more thing</p>
+                        <h3 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                          Want a matching cover letter?
+                        </h3>
+                        <p className="text-base leading-8 text-muted">
+                          We already know your resume, tone, and positioning. The add-on turns
+                          that same snapshot into a short cover letter that feels tailored instead
+                          of painfully generic.
+                        </p>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                        {coverLetterSellingPoints.map((point) => (
+                          <div
+                            key={point}
+                            className="rounded-[20px] border border-white/10 bg-white/4 p-4 text-sm leading-7 text-muted-strong"
+                          >
+                            {point}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                        <button
+                          type="button"
+                          className={primaryButtonClass}
+                          disabled={isBusy}
+                          onClick={() => void handleCheckout("cover_letter")}
+                        >
+                          {isCheckingOut ? (
+                            <>
+                              <LoaderCircle className="h-4 w-4 animate-spin" />
+                              Opening Stripe...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-4 w-4" />
+                              Get cover letter - $1.99
+                            </>
+                          )}
+                        </button>
+                        <p className="text-sm leading-7 text-muted">
+                          Same resume snapshot. No corporate “I am writing to apply” opener.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-[24px] border border-white/10 bg-black/18 p-4 sm:p-5">
+                      <p className="eyebrow text-[11px]">Mini preview</p>
+                      <div className="mt-4 space-y-4">
+                        {coverLetterPreviewLines.map((line, index) => (
+                          <p
+                            key={`${index}-${line.slice(0, 12)}`}
+                            className="font-mono text-[13px] leading-7 text-foreground/88"
+                          >
+                            {line}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
