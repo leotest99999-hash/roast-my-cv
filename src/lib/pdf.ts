@@ -75,17 +75,31 @@ export async function extractPdfText(
   }
 
   try {
-    const { extractText } = await import("unpdf");
-    let result: Awaited<ReturnType<typeof extractText>>;
+    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "";
+    let text = "";
 
     try {
-      result = await extractText(uint8Array, {
-        mergePages: true,
-      });
+      const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+      const pdf = await loadingTask.promise;
+      const pages = await Promise.all(
+        Array.from({ length: pdf.numPages }, (_, index) =>
+          pdf
+            .getPage(index + 1)
+            .then((page) => page.getTextContent())
+            .then((textContent) =>
+              textContent.items
+                .map((item) => ("str" in item ? item.str : ""))
+                .join(" "),
+            ),
+        ),
+      );
+
+      text = pages.join("\n");
     } catch (error) {
       const details = getErrorDetails(error);
 
-      console.error("[pdf] unpdf extraction failed", {
+      console.error("[pdf] pdfjs-dist extraction failed", {
         fileName: options.fileName ?? null,
         arrayBufferByteLength: arrayBuffer.byteLength,
         uint8ArrayLength: uint8Array.length,
@@ -96,8 +110,6 @@ export async function extractPdfText(
 
       throw error;
     }
-
-    const text = typeof result?.text === "string" ? result.text : "";
 
     if (!text.trim()) {
       throw new PdfExtractionError(
