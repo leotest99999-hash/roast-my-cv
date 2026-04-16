@@ -1,0 +1,85 @@
+- main [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - img [ref=e7]
+        - generic [ref=e9]:
+          - paragraph [ref=e10]: Free roast. Paid redemption.
+          - paragraph [ref=e11]: RoastMyCV
+      - generic [ref=e12]:
+        - generic [ref=e13]: PDF under 5MB
+        - generic [ref=e14]: $2.99 rewrite
+    - generic [ref=e15]:
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - paragraph [ref=e18]: Dark mode career intervention
+          - heading "Roast your resume for free. Pay $2.99 for the glow-up." [level=1] [ref=e19]:
+            - text: Roast your resume for free.
+            - generic [ref=e20]: Pay $2.99 for the glow-up.
+          - paragraph [ref=e21]: Upload a PDF and get a brutally funny, sharply useful teardown of bad formatting, cliches, weak verbs, and bullets that say absolutely nothing. If the roast lands, unlock a polished rewrite that sounds hireable.
+        - generic [ref=e22]:
+          - generic [ref=e23]:
+            - paragraph [ref=e24]: What gets roasted
+            - paragraph [ref=e25]: Formatting crimes, ATS misses, empty buzzwords.
+          - generic [ref=e26]:
+            - paragraph [ref=e27]: Why people pay
+            - paragraph [ref=e28]: The rewrite keeps your facts and fixes the execution.
+          - generic [ref=e29]:
+            - paragraph [ref=e30]: MVP rule
+            - paragraph [ref=e31]: The paid unlock is tied to the exact roasted snapshot.
+      - generic [ref=e33]:
+        - generic [ref=e34]:
+          - paragraph [ref=e35]: Upload studio
+          - heading "Start with the free roast." [level=2] [ref=e36]
+          - paragraph [ref=e37]: PDF only. No account wall. Just direct emotional damage and useful fixes.
+        - generic [ref=e38]:
+          - generic [ref=e40] [cursor=pointer]:
+            - img [ref=e42]
+            - generic [ref=e46]:
+              - paragraph [ref=e47]: Choose your PDF
+              - paragraph [ref=e48]: Click to browse or swap in a new version.
+          - button "Choose your PDF Click to browse or swap in a new version." [ref=e49]
+          - generic [ref=e50]:
+            - button "Roast this resume" [disabled] [ref=e51]:
+              - img [ref=e52]
+              - text: Roast this resume
+            - button "Unlock rewrite for $2.99" [disabled] [ref=e55]:
+              - img [ref=e56]
+              - text: Unlock rewrite for $2.99
+        - generic [ref=e59]:
+          - paragraph [ref=e60]: Current status
+          - paragraph [ref=e61]: Waiting for a PDF worth arguing with.
+    - generic [ref=e62]:
+      - generic [ref=e63]:
+        - paragraph [ref=e64]: Free analysis
+        - heading "The roast report" [level=2] [ref=e65]
+        - paragraph [ref=e66]: The first pass is free and intentionally a little mean, but every jab should point to a fix worth making.
+      - paragraph [ref=e68]: Your score, charges, and fixes land here after the upload.
+    - generic [ref=e69]:
+      - generic [ref=e70]:
+        - paragraph [ref=e71]: Paid unlock
+        - heading "The polished rewrite" [level=2] [ref=e72]
+        - paragraph [ref=e73]: After Stripe confirms the payment, the app rewrites the exact roasted snapshot into a cleaner, recruiter-ready version.
+      - generic [ref=e74]:
+        - generic [ref=e75]:
+          - paragraph [ref=e76]: Upgrade
+          - heading "Unlock the polished version when the roast earns your trust." [level=3] [ref=e77]
+          - generic [ref=e78]:
+            - generic [ref=e79]: Rewrite the summary so it sounds specific instead of ceremonial.
+            - generic [ref=e80]: Turn vague bullets into sharper, more ATS-friendly accomplishments.
+            - generic [ref=e81]: Keep the facts grounded and use placeholders where the evidence is thin.
+          - generic [ref=e82]:
+            - button "Pay $2.99" [disabled] [ref=e83]:
+              - img [ref=e84]
+              - text: Pay $2.99
+            - button "Copy markdown" [disabled] [ref=e87]:
+              - img [ref=e88]
+              - text: Copy markdown
+        - generic [ref=e93]:
+          - paragraph [ref=e94]: The premium version appears here after payment.
+          - generic [ref=e95]:
+            - paragraph [ref=e96]: "# Candidate Name"
+            - paragraph [ref=e97]: "## Summary"
+            - paragraph [ref=e98]: ATS-friendly rewrite appears here...
+            - paragraph [ref=e99]: "## Experience"
+            - paragraph [ref=e100]: "- Stronger action verbs, cleaner bullets, no fluff."

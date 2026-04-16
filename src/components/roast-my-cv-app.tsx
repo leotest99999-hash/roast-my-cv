@@ -39,9 +39,9 @@ const emailStorageKey = "roastmycv-email";
 const genericFrontendErrorMessage =
   "Something went wrong, please try again in a moment.";
 const primaryButtonClass =
-  "inline-flex items-center justify-center gap-2 rounded-full border border-coral/40 bg-coral px-5 py-3 text-sm font-semibold text-[#180f0a] transition hover:bg-[#ff7f65] disabled:cursor-not-allowed disabled:opacity-45";
+  "inline-flex w-full items-center justify-center gap-2 rounded-full border border-coral/40 bg-coral px-5 py-3 text-sm font-semibold text-[#180f0a] transition hover:bg-[#ff7f65] sm:w-auto disabled:cursor-not-allowed disabled:opacity-45";
 const secondaryButtonClass =
-  "inline-flex items-center justify-center gap-2 rounded-full border border-white/12 bg-white/4 px-5 py-3 text-sm font-semibold text-foreground transition hover:border-lime/35 hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-45";
+  "inline-flex w-full items-center justify-center gap-2 rounded-full border border-white/12 bg-white/4 px-5 py-3 text-sm font-semibold text-foreground transition hover:border-lime/35 hover:bg-white/8 sm:w-auto disabled:cursor-not-allowed disabled:opacity-45";
 
 const severityConfig: Record<
   RoastIssue["severity"],
@@ -488,28 +488,28 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
 
   return (
     <main className="relative overflow-hidden">
-      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-16 px-6 py-7 md:px-8 lg:px-10">
-        <header className="flex flex-col gap-5 rounded-full border border-white/10 bg-white/4 px-5 py-4 backdrop-blur-xl md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-4">
+      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-12 px-4 py-5 sm:gap-16 sm:px-6 sm:py-7 md:px-8 lg:px-10">
+        <header className="flex flex-col gap-5 rounded-[30px] border border-white/10 bg-white/4 px-4 py-4 backdrop-blur-xl sm:px-5 md:flex-row md:items-center md:justify-between md:rounded-full">
+          <div className="flex min-w-0 items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-full border border-coral/25 bg-coral/12 text-coral">
               <Flame className="h-5 w-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="eyebrow text-[11px]">Free roast. Paid redemption.</p>
               <p className="text-lg font-semibold tracking-tight">RoastMyCV</p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-3 text-sm text-muted">
+          <div className="flex flex-wrap gap-2 text-sm text-muted sm:gap-3">
             <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">PDF under 5MB</span>
             <span className="rounded-full border border-coral/20 bg-coral/10 px-4 py-2 text-coral">$2.99 rewrite</span>
           </div>
         </header>
 
-        <section className="grid items-start gap-10 pt-4 lg:grid-cols-[1.08fr_0.92fr] lg:pt-10">
+        <section className="grid items-start gap-8 pt-2 sm:gap-10 sm:pt-4 lg:grid-cols-[1.08fr_0.92fr] lg:pt-10">
           <div className="space-y-8">
             <div className="space-y-6">
               <p className="eyebrow">Dark mode career intervention</p>
-              <h1 className="max-w-4xl text-5xl font-semibold leading-none tracking-[-0.06em] sm:text-6xl lg:text-8xl">
+              <h1 className="max-w-4xl text-4xl font-semibold leading-[0.94] tracking-[-0.06em] sm:text-6xl sm:leading-none lg:text-8xl">
                 Roast your resume for free.
                 <span className="block text-coral">Pay $2.99 for the glow-up.</span>
               </h1>
@@ -542,12 +542,12 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
             </div>
           </div>
 
-          <section className="poster-shell rounded-[34px] p-6 md:p-8">
+          <section className="poster-shell rounded-[30px] p-5 sm:rounded-[34px] sm:p-6 md:p-8">
             <div className="scan-glow" />
             <div className="relative space-y-6">
               <div className="space-y-3">
                 <p className="eyebrow">Upload studio</p>
-                <h2 className="text-3xl font-semibold tracking-tight">
+                <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
                   Start with the free roast.
                 </h2>
                 <p className="text-sm leading-7 text-muted">
@@ -558,14 +558,14 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
               <form className="space-y-5" onSubmit={handleRoastSubmit}>
                 <label
                   htmlFor="resume-upload"
-                  className="group block cursor-pointer overflow-hidden rounded-[30px] border border-dashed border-white/16 bg-black/18 p-6 transition hover:border-lime/40 hover:bg-white/6"
+                  className="group block cursor-pointer overflow-hidden rounded-[26px] border border-dashed border-white/16 bg-black/18 p-5 transition hover:border-lime/40 hover:bg-white/6 sm:rounded-[30px] sm:p-6"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/6">
+                  <div className="flex items-start gap-3 sm:items-center">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/6 sm:h-12 sm:w-12">
                       <FileUp className="h-5 w-5" />
                     </div>
-                    <div>
-                      <p className="text-lg font-semibold">
+                    <div className="min-w-0">
+                      <p className="break-words text-base font-semibold sm:text-lg">
                         {selectedFile?.name || resumeName || "Choose your PDF"}
                       </p>
                       <p className="text-sm text-muted">
@@ -631,7 +631,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                 </div>
               </form>
 
-              <div className="rounded-[26px] border border-white/10 bg-white/4 p-5">
+              <div className="rounded-[24px] border border-white/10 bg-white/4 p-4 sm:rounded-[26px] sm:p-5">
                 <p className="eyebrow text-[11px]">Current status</p>
                 <p className="mt-3 text-base font-semibold">
                   {statusMessage || "Waiting for a PDF worth arguing with."}
@@ -653,7 +653,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
         <section className="space-y-8">
           <div className="space-y-3">
             <p className="eyebrow">Free analysis</p>
-            <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
               The roast report
             </h2>
             <p className="max-w-xl text-base leading-8 text-muted">
@@ -663,16 +663,16 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
           </div>
 
           {!analysis ? (
-            <div className="poster-shell rounded-[34px] p-8">
-              <p className="text-2xl font-semibold tracking-tight">
+            <div className="poster-shell rounded-[30px] p-6 sm:rounded-[34px] sm:p-8">
+              <p className="text-xl font-semibold tracking-tight sm:text-2xl">
                 Your score, charges, and fixes land here after the upload.
               </p>
             </div>
           ) : shouldShowEmailGate ? (
-            <div className="poster-shell rounded-[34px] p-8">
+            <div className="poster-shell rounded-[30px] p-6 sm:rounded-[34px] sm:p-8">
               <div className="max-w-xl space-y-5">
                 <div className="space-y-3">
-                  <h3 className="text-3xl font-semibold tracking-tight">
+                  <h3 className="text-2xl font-semibold tracking-tight sm:text-3xl">
                     Your roast is ready. Where should we send updates?
                   </h3>
                   <p className="text-base leading-8 text-muted">
@@ -687,7 +687,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                     onChange={(event) => setEmail(event.target.value)}
                     placeholder="you@careercomeback.com"
                     required
-                    className="w-full rounded-[30px] border border-white/16 bg-black/18 px-5 py-4 text-base text-foreground outline-none transition placeholder:text-muted focus:border-lime/40 focus:bg-white/6"
+                    className="w-full rounded-[24px] border border-white/16 bg-black/18 px-4 py-4 text-base text-foreground outline-none transition placeholder:text-muted focus:border-lime/40 focus:bg-white/6 sm:rounded-[30px] sm:px-5"
                   />
                   <button type="submit" className={primaryButtonClass}>
                     Show my roast
@@ -705,21 +705,21 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
             </div>
           ) : (
             <div className="grid gap-5 lg:grid-cols-[0.43fr_0.57fr]">
-              <div className="poster-shell rounded-[34px] p-7">
+              <div className="poster-shell rounded-[30px] p-5 sm:rounded-[34px] sm:p-7">
                 <p className="eyebrow">Scorecard</p>
-                <div className="mt-6 flex items-end gap-4">
-                  <p className="text-7xl font-semibold leading-none tracking-[-0.08em]">
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
+                  <p className="text-6xl font-semibold leading-none tracking-[-0.08em] sm:text-7xl">
                     {analysis.score}
                   </p>
-                  <div className="pb-2">
+                  <div className="sm:pb-2">
                     <p className="text-lg font-semibold text-coral">{analysis.scoreLabel}</p>
                     <p className="text-sm text-muted">Resume health score</p>
                   </div>
                 </div>
-                <div className="mt-6 rounded-[24px] border border-white/10 bg-white/4 p-5">
+                <div className="mt-6 rounded-[22px] border border-white/10 bg-white/4 p-4 sm:rounded-[24px] sm:p-5">
                   <p className="eyebrow text-[11px]">ATS score</p>
                   <p
-                    className={`mt-3 text-7xl font-semibold leading-none tracking-[-0.08em] ${getAtsScoreClassName(
+                    className={`mt-3 text-6xl font-semibold leading-none tracking-[-0.08em] sm:text-7xl ${getAtsScoreClassName(
                       analysis.atsScore,
                     )}`}
                   >
@@ -729,7 +729,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                     {analysis.atsVerdict}
                   </p>
                 </div>
-                <p className="mt-7 text-2xl font-semibold leading-tight">{analysis.lead}</p>
+                <p className="mt-7 text-xl font-semibold leading-tight sm:text-2xl">{analysis.lead}</p>
                 <p className="mt-4 text-base leading-8 text-muted">{analysis.summary}</p>
                 <button
                   type="button"
@@ -740,7 +740,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                   Share your roast
                 </button>
 
-                <div className="mt-7 rounded-[26px] border border-white/10 bg-white/4 p-5">
+                <div className="mt-7 rounded-[24px] border border-white/10 bg-white/4 p-4 sm:rounded-[26px] sm:p-5">
                   <p className="eyebrow text-[11px]">What already works</p>
                   <div className="mt-4 space-y-3">
                     {analysis.wins.map((win) => (
@@ -768,7 +768,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
         <section id="premium-rewrite" className="space-y-8 pb-10">
           <div className="space-y-3">
             <p className="eyebrow">Paid unlock</p>
-            <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
               The polished rewrite
             </h2>
             <p className="max-w-xl text-base leading-8 text-muted">
@@ -778,9 +778,9 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
           </div>
 
           <div className="grid gap-5 lg:grid-cols-[0.38fr_0.62fr]">
-            <div className="poster-shell rounded-[34px] p-7">
+            <div className="poster-shell rounded-[30px] p-5 sm:rounded-[34px] sm:p-7">
               <p className="eyebrow">{analysis?.upgradePitch.eyebrow || "Upgrade"}</p>
-              <h3 className="mt-4 text-3xl font-semibold tracking-tight">
+              <h3 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">
                 {analysis?.upgradePitch.headline ||
                   "Unlock the polished version when the roast earns your trust."}
               </h3>
@@ -799,7 +799,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                 ))}
               </div>
 
-              <div className="mt-7 flex flex-wrap gap-3">
+              <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 {!paidUnlocked ? (
                   <button
                     type="button"
@@ -864,14 +864,14 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
               </div>
             </div>
 
-            <div className="space-y-5">
-              <div className="poster-shell rounded-[34px] p-7">
+            <div className="space-y-4 sm:space-y-5">
+              <div className="poster-shell rounded-[30px] p-5 sm:rounded-[34px] sm:p-7">
                 {!rewrite ? (
                   <div className="space-y-5">
-                    <p className="text-2xl font-semibold tracking-tight">
+                    <p className="text-xl font-semibold tracking-tight sm:text-2xl">
                       The premium version appears here after payment.
                     </p>
-                    <div className="rounded-[24px] border border-white/10 bg-black/18 p-5 font-mono text-sm text-muted">
+                    <div className="rounded-[22px] border border-white/10 bg-black/18 p-4 font-mono text-sm text-muted sm:rounded-[24px] sm:p-5">
                       <p># Candidate Name</p>
                       <p className="mt-3">## Summary</p>
                       <p className="mt-2">ATS-friendly rewrite appears here...</p>
@@ -883,7 +883,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                   <div className="space-y-6">
                     <div className="space-y-3">
                       <p className="eyebrow">Unlocked rewrite</p>
-                      <h3 className="text-3xl font-semibold tracking-tight">{rewrite.title}</h3>
+                      <h3 className="text-2xl font-semibold tracking-tight sm:text-3xl">{rewrite.title}</h3>
                       <p className="text-base leading-8 text-muted">{rewrite.positioning}</p>
                     </div>
 
@@ -898,7 +898,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                       ))}
                     </div>
 
-                    <div className="rounded-[28px] border border-white/10 bg-black/18 p-5">
+                    <div className="rounded-[24px] border border-white/10 bg-black/18 p-4 sm:rounded-[28px] sm:p-5">
                       <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[13px] leading-7 text-foreground/90">
                         {rewrite.polishedResume}
                       </pre>
@@ -912,10 +912,10 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
               </div>
 
               {rewrite && !coverLetterSessionId && (
-                <div className="poster-shell rounded-[34px] p-7">
+                <div className="poster-shell rounded-[30px] p-5 sm:rounded-[34px] sm:p-7">
                   <div className="space-y-4">
                     <p className="eyebrow">One more thing</p>
-                    <h3 className="text-3xl font-semibold tracking-tight">
+                    <h3 className="text-2xl font-semibold tracking-tight sm:text-3xl">
                       Want a matching cover letter?
                     </h3>
                     <p className="text-base leading-8 text-muted">
@@ -944,12 +944,12 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
               )}
 
               {rewrite && coverLetterSessionId && (
-                <div id="cover-letter" className="poster-shell rounded-[34px] p-7">
+                <div id="cover-letter" className="poster-shell rounded-[30px] p-5 sm:rounded-[34px] sm:p-7">
                   {!coverLetter ? (
                     <div className="space-y-5">
                       <div className="space-y-3">
                         <p className="eyebrow">Matching cover letter</p>
-                        <h3 className="text-3xl font-semibold tracking-tight">
+                        <h3 className="text-2xl font-semibold tracking-tight sm:text-3xl">
                           Your cover letter is on deck.
                         </h3>
                         <p className="text-base leading-8 text-muted">
@@ -977,7 +977,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="space-y-3">
                           <p className="eyebrow">Matching cover letter</p>
-                          <h3 className="text-3xl font-semibold tracking-tight">
+                          <h3 className="text-2xl font-semibold tracking-tight sm:text-3xl">
                             Ready to send with the rewrite.
                           </h3>
                         </div>
@@ -1000,7 +1000,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                         </button>
                       </div>
 
-                      <div className="rounded-[28px] border border-white/10 bg-black/18 p-5">
+                      <div className="rounded-[24px] border border-white/10 bg-black/18 p-4 sm:rounded-[28px] sm:p-5">
                         <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[13px] leading-7 text-foreground/90">
                           {coverLetter}
                         </pre>
