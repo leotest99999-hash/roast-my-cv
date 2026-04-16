@@ -1,3 +1,4 @@
+import { jsonApiError, logApiError } from "@/lib/api-errors";
 import { normalizeResumeText, sha256 } from "@/lib/hash";
 import { getStripeClient } from "@/lib/stripe";
 
@@ -15,16 +16,16 @@ export async function POST(request: Request) {
     const computedHash = sha256(normalizedResume);
 
     if (!normalizedResume) {
-      return Response.json(
-        { error: "Run a free roast first so there is something worth polishing." },
-        { status: 400 },
+      return jsonApiError(
+        "Run a free roast first so there is something worth polishing.",
+        400,
       );
     }
 
     if (body.resumeHash !== computedHash) {
-      return Response.json(
-        { error: "The resume snapshot drifted. Roast it again before paying." },
-        { status: 400 },
+      return jsonApiError(
+        "Your roast is out of date. Please roast your resume again before paying.",
+        400,
       );
     }
 
@@ -61,16 +62,16 @@ export async function POST(request: Request) {
     });
 
     if (!session.url) {
-      throw new Error("Stripe created a session but forgot the checkout URL.");
+      logApiError(
+        "checkout:missing-url",
+        new Error("Stripe created a session without a checkout URL."),
+      );
+      return jsonApiError();
     }
 
     return Response.json({ url: session.url });
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Stripe had a moment. Try checkout again.";
-
-    return Response.json({ error: message }, { status: 500 });
+    logApiError("checkout", error);
+    return jsonApiError();
   }
 }

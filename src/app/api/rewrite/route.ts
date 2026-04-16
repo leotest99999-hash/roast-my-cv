@@ -1,3 +1,4 @@
+import { jsonApiError, logApiError } from "@/lib/api-errors";
 import { createStructuredGroqCompletion } from "@/lib/groq";
 import { normalizeResumeText, sha256 } from "@/lib/hash";
 import { createRewriteUserPrompt, rewriteSystemPrompt } from "@/lib/prompts";
@@ -19,16 +20,16 @@ export async function POST(request: Request) {
     const computedHash = sha256(normalizedResume);
 
     if (!body.sessionId || !normalizedResume) {
-      return Response.json(
-        { error: "Missing the paid session or resume snapshot." },
-        { status: 400 },
+      return jsonApiError(
+        "We couldn't find the paid rewrite details. Please roast your resume again and retry.",
+        400,
       );
     }
 
     if (body.resumeHash !== computedHash) {
-      return Response.json(
-        { error: "The resume snapshot changed after checkout. Roast it again first." },
-        { status: 400 },
+      return jsonApiError(
+        "Your resume changed after checkout. Please run the free roast again before unlocking the rewrite.",
+        400,
       );
     }
 
@@ -40,19 +41,16 @@ export async function POST(request: Request) {
       session.metadata?.product === "polished_rewrite";
 
     if (!paid) {
-      return Response.json(
-        { error: "That checkout session has not paid for a rewrite." },
-        { status: 403 },
+      return jsonApiError(
+        "We couldn't confirm payment for this rewrite yet. Please try again in a moment.",
+        403,
       );
     }
 
     if (session.metadata?.resumeHash !== computedHash) {
-      return Response.json(
-        {
-          error:
-            "This paid session belongs to a different roasted resume snapshot.",
-        },
-        { status: 403 },
+      return jsonApiError(
+        "We couldn't match this payment to the current roast. Please roast your resume again and retry.",
+        403,
       );
     }
 
@@ -67,11 +65,7 @@ export async function POST(request: Request) {
       polishedResume: normalizeResumeText(groqResult.polishedResume),
     });
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Could not generate the polished rewrite.";
-
-    return Response.json({ error: message }, { status: 500 });
+    logApiError("rewrite", error);
+    return jsonApiError();
   }
 }

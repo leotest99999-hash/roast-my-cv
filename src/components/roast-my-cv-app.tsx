@@ -25,6 +25,8 @@ type StoredSession = {
 };
 
 const storageKey = "roastmycv-session-v1";
+const genericFrontendErrorMessage =
+  "Something went wrong, please try again in a moment.";
 const primaryButtonClass =
   "inline-flex items-center justify-center gap-2 rounded-full border border-coral/40 bg-coral px-5 py-3 text-sm font-semibold text-[#180f0a] transition hover:bg-[#ff7f65] disabled:cursor-not-allowed disabled:opacity-45";
 const secondaryButtonClass =
@@ -48,17 +50,8 @@ const severityConfig: Record<
   },
 };
 
-function getApiError(payload: unknown, fallback: string) {
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "error" in payload &&
-    typeof payload.error === "string"
-  ) {
-    return payload.error;
-  }
-
-  return fallback;
+function getFriendlyFrontendError() {
+  return genericFrontendErrorMessage;
 }
 
 function IssueRow({ issue }: { issue: RoastIssue }) {
@@ -159,13 +152,13 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
           resumeHash: analysis.resumeHash,
         }),
       });
-      const payload = (await response.json()) as RewriteResult | { error?: string };
 
       if (!response.ok) {
-        throw new Error(getApiError(payload, "Could not generate the rewrite."));
+        throw new Error(getFriendlyFrontendError());
       }
 
-      setRewrite(payload as RewriteResult);
+      const payload = (await response.json()) as RewriteResult;
+      setRewrite(payload);
       setPaidSessionId(sessionId);
       setStatusMessage("Polished rewrite ready. Copy it and tailor it before sending.");
       window.setTimeout(() => {
@@ -173,12 +166,8 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
           .getElementById("premium-rewrite")
           ?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 80);
-    } catch (rewriteError) {
-      setError(
-        rewriteError instanceof Error
-          ? rewriteError.message
-          : "Could not generate the rewrite.",
-      );
+    } catch {
+      setError(getFriendlyFrontendError());
     } finally {
       setIsRewriting(false);
     }
@@ -193,15 +182,15 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
       const response = await fetch(
         `/api/checkout/verify?session_id=${encodeURIComponent(sessionId)}`,
       );
-      const payload = (await response.json()) as
-        | { paid: boolean; resumeHash: string | null; error?: string }
-        | { error?: string };
 
       if (!response.ok) {
-        throw new Error(getApiError(payload, "Could not verify the payment."));
+        throw new Error(getFriendlyFrontendError());
       }
 
-      const verification = payload as { paid: boolean; resumeHash: string | null };
+      const verification = (await response.json()) as {
+        paid: boolean;
+        resumeHash: string | null;
+      };
       if (!verification.paid) {
         setStatusMessage("Stripe has the session, but payment is not complete yet.");
         return;
@@ -228,12 +217,8 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
       }
 
       setStatusMessage("Payment confirmed. Your polished rewrite is already unlocked.");
-    } catch (verificationError) {
-      setError(
-        verificationError instanceof Error
-          ? verificationError.message
-          : "Could not verify the payment.",
-      );
+    } catch {
+      setError(getFriendlyFrontendError());
     } finally {
       setIsVerifyingPayment(false);
     }
@@ -274,19 +259,17 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
         method: "POST",
         body: formData,
       });
-      const payload = (await response.json()) as RoastResult | { error?: string };
 
       if (!response.ok) {
-        throw new Error(getApiError(payload, "Could not roast that PDF."));
+        throw new Error(getFriendlyFrontendError());
       }
 
-      setAnalysis(payload as RoastResult);
+      const payload = (await response.json()) as RoastResult;
+      setAnalysis(payload);
       setResumeName(selectedFile.name);
       setStatusMessage("Roast complete. If it stings in the right places, the rewrite button is live.");
-    } catch (roastError) {
-      setError(
-        roastError instanceof Error ? roastError.message : "Could not roast that PDF.",
-      );
+    } catch {
+      setError(getFriendlyFrontendError());
     } finally {
       setIsRoasting(false);
     }
@@ -311,19 +294,15 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
           resumeName,
         }),
       });
-      const payload = (await response.json()) as { url: string } | { error?: string };
 
       if (!response.ok) {
-        throw new Error(getApiError(payload, "Could not open Stripe Checkout."));
+        throw new Error(getFriendlyFrontendError());
       }
 
-      window.location.assign((payload as { url: string }).url);
-    } catch (checkoutError) {
-      setError(
-        checkoutError instanceof Error
-          ? checkoutError.message
-          : "Could not open Stripe Checkout.",
-      );
+      const payload = (await response.json()) as { url: string };
+      window.location.assign(payload.url);
+    } catch {
+      setError(getFriendlyFrontendError());
     } finally {
       setIsCheckingOut(false);
     }

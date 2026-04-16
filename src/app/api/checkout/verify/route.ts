@@ -1,3 +1,4 @@
+import { jsonApiError, logApiError } from "@/lib/api-errors";
 import { getStripeClient } from "@/lib/stripe";
 
 export const runtime = "nodejs";
@@ -8,9 +9,9 @@ export async function GET(request: Request) {
     const sessionId = searchParams.get("session_id");
 
     if (!sessionId) {
-      return Response.json(
-        { error: "Missing checkout session id." },
-        { status: 400 },
+      return jsonApiError(
+        "We couldn't verify that payment link. Please try again.",
+        400,
       );
     }
 
@@ -29,11 +30,7 @@ export async function GET(request: Request) {
       amountTotal: session.amount_total ?? null,
     });
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Could not verify the checkout session.";
-
-    return Response.json({ error: message }, { status: 500 });
+    logApiError("checkout:verify", error);
+    return jsonApiError();
   }
 }
