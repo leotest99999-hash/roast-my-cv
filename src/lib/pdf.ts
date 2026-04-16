@@ -8,10 +8,12 @@ export class PdfExtractionError extends Error {
   }
 }
 
-export function hasPdfSignature(pdfBuffer: Buffer | Uint8Array) {
-  const headerWindow = pdfBuffer.subarray(
+export function hasPdfSignature(pdfInput: ArrayBuffer | Uint8Array) {
+  const pdfBytes =
+    pdfInput instanceof Uint8Array ? pdfInput : new Uint8Array(pdfInput);
+  const headerWindow = pdfBytes.subarray(
     0,
-    Math.min(pdfBuffer.length, pdfHeaderSearchWindow),
+    Math.min(pdfBytes.length, pdfHeaderSearchWindow),
   );
   const maxOffset = headerWindow.length - pdfHeader.length;
 
@@ -53,10 +55,12 @@ function getErrorDetails(error: unknown) {
 }
 
 export async function extractPdfText(
-  pdfBuffer: Buffer,
+  arrayBuffer: ArrayBuffer,
   options: ExtractPdfTextOptions = {},
 ) {
-  if (!pdfBuffer.length) {
+  const uint8Array = new Uint8Array(arrayBuffer);
+
+  if (!uint8Array.length) {
     throw new PdfExtractionError(
       "That upload looks empty. Please export the PDF again and retry.",
     );
@@ -64,7 +68,7 @@ export async function extractPdfText(
 
   const fileNameLooksLikePdf = options.fileName?.toLowerCase().endsWith(".pdf");
 
-  if (!hasPdfSignature(pdfBuffer) && !fileNameLooksLikePdf) {
+  if (!hasPdfSignature(uint8Array) && !fileNameLooksLikePdf) {
     throw new PdfExtractionError(
       "That file doesn't look like a valid PDF. Please upload a PDF resume and try again.",
     );
@@ -72,15 +76,10 @@ export async function extractPdfText(
 
   try {
     const { extractText } = await import("unpdf");
-    const pdfBytes = new Uint8Array(
-      pdfBuffer.buffer,
-      pdfBuffer.byteOffset,
-      pdfBuffer.byteLength,
-    );
     let result: Awaited<ReturnType<typeof extractText>>;
 
     try {
-      result = await extractText(pdfBytes, {
+      result = await extractText(uint8Array, {
         mergePages: true,
       });
     } catch (error) {
@@ -88,8 +87,8 @@ export async function extractPdfText(
 
       console.error("[pdf] unpdf extraction failed", {
         fileName: options.fileName ?? null,
-        bufferLength: pdfBuffer.length,
-        uint8ArrayLength: pdfBytes.length,
+        arrayBufferByteLength: arrayBuffer.byteLength,
+        uint8ArrayLength: uint8Array.length,
         errorName: details.name,
         errorMessage: details.message,
         errorStack: details.stack,
