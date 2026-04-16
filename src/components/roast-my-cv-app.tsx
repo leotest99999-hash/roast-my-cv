@@ -11,6 +11,7 @@ import {
   FileUp,
   Flame,
   LoaderCircle,
+  RotateCcw,
   Share2,
   Shield,
   Sparkles,
@@ -298,6 +299,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
   const processedSessionRef = useRef<string | null>(null);
   const copyTimeoutRef = useRef<number | null>(null);
   const coverLetterCopyTimeoutRef = useRef<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     try {
@@ -1039,6 +1041,31 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
     window.open(shareUrl, "_blank", "noopener,noreferrer");
   }
 
+  function handleResetResumeFlow() {
+    setSelectedFile(null);
+    setResumeName(null);
+    setAnalysis(null);
+    setRewrite(null);
+    setCoverLetter(null);
+    setCoverLetterSessionId(null);
+    setPaidSessionId(null);
+    setStatusMessage(null);
+    setError(null);
+    setDidCopy(false);
+    setDidCopyCoverLetter(false);
+    setRoastLoadingIndex(0);
+    setRoastProgress(0);
+    processedSessionRef.current = null;
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    window.localStorage.removeItem(storageKey);
+
+    if (window.location.search.includes("session_id=") || window.location.hash) {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }
+
   function handlePreviewRewriteAction() {
     setStatusMessage(
       "Owner preview is showing the unlocked rewrite state. Real regeneration still needs a paid session.",
@@ -1240,6 +1267,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                 </label>
                 <input
                   id="resume-upload"
+                  ref={fileInputRef}
                   type="file"
                   accept="application/pdf"
                   className="sr-only"
@@ -1300,6 +1328,18 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                     )}
                   </button>
                 </div>
+
+                {(analysis || resumeName || selectedFile) && (
+                  <button
+                    type="button"
+                    className={secondaryButtonClass}
+                    disabled={isBusy}
+                    onClick={handleResetResumeFlow}
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Start over with a new PDF
+                  </button>
+                )}
               </form>
 
               <div className="rounded-[24px] border border-white/10 bg-white/4 p-4 sm:rounded-[26px] sm:p-5">
