@@ -14,6 +14,10 @@ import {
 } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type {
+  CheckoutVerificationResult,
+  PremiumProduct,
+} from "@/lib/premium-session-types";
+import type {
   CoverLetterResult,
   RoastIssue,
   RoastResult,
@@ -23,8 +27,6 @@ import type {
 type RoastMyCvAppProps = {
   initialSessionId: string | null;
 };
-
-type PremiumProduct = "polished_rewrite" | "cover_letter";
 
 type StoredSession = {
   analysis: RoastResult | null;
@@ -235,25 +237,41 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
     };
   }, [isRoasting]);
 
-  async function requestRewrite(sessionId: string) {
-    if (!analysis) {
-      setError("The roast snapshot is missing, so the rewrite cannot start.");
-      return;
-    }
-
+  async function requestRewrite(
+    sessionId: string,
+    options?: {
+      resumeHash?: string | null;
+      resumeText?: string | null;
+    },
+  ) {
     setIsRewriting(true);
     setError(null);
     setStatusMessage("Paid unlock verified. Rewriting the resume now...");
 
     try {
+      const body: {
+        sessionId: string;
+        resumeHash?: string;
+        resumeText?: string;
+      } = {
+        sessionId,
+      };
+      const resumeHash = analysis?.resumeHash ?? options?.resumeHash ?? null;
+      const resumeText =
+        analysis?.normalizedResume ?? options?.resumeText ?? null;
+
+      if (resumeHash) {
+        body.resumeHash = resumeHash;
+      }
+
+      if (resumeText) {
+        body.resumeText = resumeText;
+      }
+
       const response = await fetch("/api/rewrite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId,
-          resumeText: analysis.normalizedResume,
-          resumeHash: analysis.resumeHash,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
@@ -276,26 +294,42 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
     }
   }
 
-  async function requestCoverLetter(sessionId: string) {
-    if (!analysis) {
-      setError("The roast snapshot is missing, so the cover letter cannot start.");
-      return;
-    }
-
+  async function requestCoverLetter(
+    sessionId: string,
+    options?: {
+      resumeHash?: string | null;
+      resumeText?: string | null;
+    },
+  ) {
     setIsGeneratingCoverLetter(true);
     setCoverLetterSessionId(sessionId);
     setError(null);
     setStatusMessage("Payment confirmed. Drafting your matching cover letter now...");
 
     try {
+      const body: {
+        sessionId: string;
+        resumeHash?: string;
+        resumeText?: string;
+      } = {
+        sessionId,
+      };
+      const resumeHash = analysis?.resumeHash ?? options?.resumeHash ?? null;
+      const resumeText =
+        analysis?.normalizedResume ?? options?.resumeText ?? null;
+
+      if (resumeHash) {
+        body.resumeHash = resumeHash;
+      }
+
+      if (resumeText) {
+        body.resumeText = resumeText;
+      }
+
       const response = await fetch("/api/rewrite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId,
-          resumeText: analysis.normalizedResume,
-          resumeHash: analysis.resumeHash,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
@@ -331,14 +365,27 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
         throw new Error(getFriendlyFrontendError());
       }
 
-      const verification = (await response.json()) as {
-        paid: boolean;
-        product: PremiumProduct | null;
-        resumeHash: string | null;
-      };
+      const verification =
+        (await response.json()) as CheckoutVerificationResult;
       if (!verification.paid) {
         setStatusMessage("Stripe has the session, but payment is not complete yet.");
         return;
+      }
+
+      if (verification.analysis) {
+        setAnalysis(verification.analysis);
+      }
+
+      if (verification.resumeName) {
+        setResumeName(verification.resumeName);
+      }
+
+      if (verification.rewrite) {
+        setRewrite(verification.rewrite);
+      }
+
+      if (verification.coverLetter) {
+        setCoverLetter(verification.coverLetter);
       }
 
       if (window.location.search.includes("session_id=")) {
@@ -347,35 +394,42 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
         window.history.replaceState({}, "", `${window.location.pathname}${nextHash}`);
       }
 
-      if (!analysis) {
-        setStatusMessage("Payment confirmed. Re-open the same roasted resume on this device.");
-        return;
-      }
-
-      if (verification.resumeHash !== analysis.resumeHash) {
+      const activeResumeHash = analysis?.resumeHash ?? verification.analysis?.resumeHash ?? null;
+      if (
+        activeResumeHash &&
+        verification.resumeHash &&
+        verification.resumeHash !== activeResumeHash
+      ) {
         setStatusMessage("Payment confirmed, but the stored roast no longer matches this session.");
         return;
       }
 
       if (verification.product === "cover_letter") {
         setCoverLetterSessionId(sessionId);
+        if (verification.rewriteSessionId) {
+          setPaidSessionId(verification.rewriteSessionId);
+        }
 
-        if (!coverLetter || coverLetterSessionId !== sessionId) {
-          await requestCoverLetter(sessionId);
+        if (verification.coverLetter) {
+          setStatusMessage("Payment confirmed. Your matching cover letter is already unlocked.");
           return;
         }
 
-        setStatusMessage("Payment confirmed. Your matching cover letter is already unlocked.");
+        await requestCoverLetter(sessionId, {
+          resumeHash: verification.resumeHash,
+        });
         return;
       }
 
-      setPaidSessionId(sessionId);
-      if (!rewrite || paidSessionId !== sessionId) {
-        await requestRewrite(sessionId);
+      setPaidSessionId(verification.rewriteSessionId ?? sessionId);
+      if (verification.rewrite) {
+        setStatusMessage("Payment confirmed. Your polished rewrite is already unlocked.");
         return;
       }
 
-      setStatusMessage("Payment confirmed. Your polished rewrite is already unlocked.");
+      await requestRewrite(sessionId, {
+        resumeHash: verification.resumeHash,
+      });
     } catch {
       setError(getFriendlyFrontendError());
     } finally {
@@ -455,6 +509,9 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
           resumeHash: analysis.resumeHash,
           resumeName,
           product,
+          rewriteSessionId: paidSessionId,
+          analysis,
+          rewrite,
         }),
       });
 
@@ -677,7 +734,11 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
     isRewriting ||
     isGeneratingCoverLetter;
   const paidUnlocked = Boolean(paidSessionId);
-  const shouldShowEmailGate = Boolean(analysis) && !emailSubmitted;
+  const shouldShowEmailGate =
+    Boolean(analysis) &&
+    !emailSubmitted &&
+    !paidUnlocked &&
+    !coverLetterSessionId;
 
   return (
     <main className="relative overflow-hidden">

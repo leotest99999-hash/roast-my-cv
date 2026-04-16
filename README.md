@@ -8,6 +8,7 @@ RoastMyCV is a Next.js app that lets people upload a PDF resume, get a brutally 
 - Tailwind CSS 4
 - Groq Chat Completions API
 - Stripe Checkout
+- Vercel Blob for durable premium-session storage
 - Vercel-ready deployment
 
 ## Local setup
@@ -35,6 +36,8 @@ Copy `.env.example` to `.env.local` and set:
 - `GROQ_API_KEY`
 - `GROQ_MODEL` (optional, defaults to `llama-3.3-70b-versatile`)
 - `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `BLOB_READ_WRITE_TOKEN`
 - `NEXT_PUBLIC_APP_URL`
 
 ## Product flow
@@ -42,13 +45,15 @@ Copy `.env.example` to `.env.local` and set:
 1. User uploads a PDF resume.
 2. `/api/roast` sends extracted resume text to Groq for a structured roast and returns a normalized snapshot of the resume.
 3. `/api/checkout` creates a Stripe Checkout Session for a one-time $2.99 payment.
-4. After Stripe redirects back, `/api/checkout/verify` confirms the paid session.
-5. `/api/rewrite` verifies the paid session matches the roasted resume snapshot, then generates the polished rewrite.
+4. `/api/checkout` stores the roast snapshot server-side before redirecting to Stripe Checkout.
+5. A Stripe webhook on `/api/stripe/webhook` marks successful Checkout Sessions as paid.
+6. After Stripe redirects back, `/api/checkout/verify` confirms the paid session and restores any persisted premium data.
+7. `/api/rewrite` verifies the paid session matches the stored roast snapshot, then generates or returns the saved premium output.
 
 ## Notes
 
 - The paid rewrite is intentionally tied to the exact roasted snapshot from the free analysis.
-- This MVP does not use a database or webhooks.
+- Premium unlocks now persist server-side. Local development falls back to `.data/premium-unlocks` if `BLOB_READ_WRITE_TOKEN` is not set.
 - The upload is limited to PDFs under 5MB so the app stays fast and deployment-safe.
 
 ## Verification

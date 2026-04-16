@@ -1,5 +1,8 @@
 import { jsonApiError, logApiError } from "@/lib/api-errors";
 import { normalizeResumeText, sha256 } from "@/lib/hash";
+import { persistCheckoutDraft } from "@/lib/premium-sessions";
+import { resolvePremiumProduct } from "@/lib/premium-session-types";
+import type { RoastResult, RewriteResult } from "@/lib/schemas";
 import { getStripeClient } from "@/lib/stripe";
 
 export const runtime = "nodejs";
@@ -11,6 +14,9 @@ export async function POST(request: Request) {
       resumeHash?: string;
       resumeName?: string;
       product?: string;
+      rewriteSessionId?: string;
+      analysis?: RoastResult | null;
+      rewrite?: RewriteResult | null;
     };
 
     const normalizedResume = normalizeResumeText(body.resumeText ?? "");
@@ -33,7 +39,7 @@ export async function POST(request: Request) {
     const stripe = getStripeClient();
     const origin =
       process.env.NEXT_PUBLIC_APP_URL || request.headers.get("origin") || new URL(request.url).origin;
-    const product = body.product === "cover_letter" ? "cover_letter" : "polished_rewrite";
+    const product = resolvePremiumProduct(body.product) ?? "polished_rewrite";
     const priceConfig =
       product === "cover_letter"
         ? {
@@ -73,6 +79,9 @@ export async function POST(request: Request) {
         product,
         resumeHash: computedHash,
         resumeName: body.resumeName?.slice(0, 200) ?? "resume.pdf",
+        ...(body.rewriteSessionId
+          ? { rewriteSessionId: body.rewriteSessionId.slice(0, 200) }
+          : {}),
       },
     });
 
@@ -82,6 +91,21 @@ export async function POST(request: Request) {
         new Error("Stripe created a session without a checkout URL."),
       );
       return jsonApiError();
+    }
+
+    try {
+      await persistCheckoutDraft({
+        sessionId: session.id,
+        product,
+        resumeHash: computedHash,
+        resumeName: body.resumeName?.slice(0, 200) ?? "resume.pdf",
+        rewriteSessionId: body.rewriteSessionId ?? null,
+        resumeText: normalizedResume,
+        analysis: body.analysis ?? null,
+        rewrite: body.rewrite ?? null,
+      });
+    } catch (error) {
+      logApiError("checkout:persist-draft", error);
     }
 
     return Response.json({ url: session.url });
