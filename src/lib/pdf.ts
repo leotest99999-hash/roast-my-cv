@@ -75,31 +75,16 @@ export async function extractPdfText(
   }
 
   try {
-    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    pdfjsLib.GlobalWorkerOptions.workerSrc = "";
+    const pdfParse = (await import("pdf-parse/lib/pdf-parse.js")).default;
     let text = "";
 
     try {
-      const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
-      const pdf = await loadingTask.promise;
-      const pages = await Promise.all(
-        Array.from({ length: pdf.numPages }, (_, index) =>
-          pdf
-            .getPage(index + 1)
-            .then((page) => page.getTextContent())
-            .then((textContent) =>
-              textContent.items
-                .map((item) => ("str" in item ? item.str : ""))
-                .join(" "),
-            ),
-        ),
-      );
-
-      text = pages.join("\n");
+      const result = await pdfParse(Buffer.from(arrayBuffer));
+      text = typeof result?.text === "string" ? result.text : "";
     } catch (error) {
       const details = getErrorDetails(error);
 
-      console.error("[pdf] pdfjs-dist extraction failed", {
+      console.error("[pdf] pdf-parse extraction failed", {
         fileName: options.fileName ?? null,
         arrayBufferByteLength: arrayBuffer.byteLength,
         uint8ArrayLength: uint8Array.length,
