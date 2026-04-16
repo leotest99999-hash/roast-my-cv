@@ -7,24 +7,35 @@ import {
   FileUp,
   Flame,
   LoaderCircle,
+  Share2,
   Sparkles,
   TriangleAlert,
 } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
-import type { RoastIssue, RoastResult, RewriteResult } from "@/lib/schemas";
+import type {
+  CoverLetterResult,
+  RoastIssue,
+  RoastResult,
+  RewriteResult,
+} from "@/lib/schemas";
 
 type RoastMyCvAppProps = {
   initialSessionId: string | null;
 };
 
+type PremiumProduct = "polished_rewrite" | "cover_letter";
+
 type StoredSession = {
   analysis: RoastResult | null;
   rewrite: RewriteResult | null;
+  coverLetter: string | null;
+  coverLetterSessionId: string | null;
   paidSessionId: string | null;
   resumeName: string | null;
 };
 
 const storageKey = "roastmycv-session-v1";
+const emailStorageKey = "roastmycv-email";
 const genericFrontendErrorMessage =
   "Something went wrong, please try again in a moment.";
 const primaryButtonClass =
@@ -52,6 +63,18 @@ const severityConfig: Record<
 
 function getFriendlyFrontendError() {
   return genericFrontendErrorMessage;
+}
+
+function getAtsScoreClassName(atsScore: number) {
+  if (atsScore < 50) {
+    return "text-coral";
+  }
+
+  if (atsScore < 75) {
+    return "text-gold";
+  }
+
+  return "text-lime";
 }
 
 function IssueRow({ issue }: { issue: RoastIssue }) {
@@ -83,28 +106,43 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
   const [hydrated, setHydrated] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [resumeName, setResumeName] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [emailSubmitted, setEmailSubmitted] = useState(false);
   const [analysis, setAnalysis] = useState<RoastResult | null>(null);
   const [rewrite, setRewrite] = useState<RewriteResult | null>(null);
+  const [coverLetter, setCoverLetter] = useState<string | null>(null);
+  const [coverLetterSessionId, setCoverLetterSessionId] = useState<string | null>(null);
   const [paidSessionId, setPaidSessionId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [didCopy, setDidCopy] = useState(false);
+  const [didCopyCoverLetter, setDidCopyCoverLetter] = useState(false);
   const [isRoasting, setIsRoasting] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
   const [isRewriting, setIsRewriting] = useState(false);
+  const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
   const processedSessionRef = useRef<string | null>(null);
   const copyTimeoutRef = useRef<number | null>(null);
+  const coverLetterCopyTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(storageKey);
+      const storedEmail = window.localStorage.getItem(emailStorageKey);
       if (raw) {
         const stored = JSON.parse(raw) as StoredSession;
         setAnalysis(stored.analysis ?? null);
         setRewrite(stored.rewrite ?? null);
+        setCoverLetter(stored.coverLetter ?? null);
+        setCoverLetterSessionId(stored.coverLetterSessionId ?? null);
         setPaidSessionId(stored.paidSessionId ?? null);
         setResumeName(stored.resumeName ?? null);
+      }
+
+      if (storedEmail) {
+        setEmail(storedEmail);
+        setEmailSubmitted(true);
       }
     } catch {
       window.localStorage.removeItem(storageKey);
@@ -120,14 +158,33 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
 
     window.localStorage.setItem(
       storageKey,
-      JSON.stringify({ analysis, rewrite, paidSessionId, resumeName } satisfies StoredSession),
+      JSON.stringify({
+        analysis,
+        rewrite,
+        coverLetter,
+        coverLetterSessionId,
+        paidSessionId,
+        resumeName,
+      } satisfies StoredSession),
     );
-  }, [analysis, hydrated, paidSessionId, resumeName, rewrite]);
+  }, [
+    analysis,
+    coverLetter,
+    coverLetterSessionId,
+    hydrated,
+    paidSessionId,
+    resumeName,
+    rewrite,
+  ]);
 
   useEffect(() => {
     return () => {
       if (copyTimeoutRef.current) {
         window.clearTimeout(copyTimeoutRef.current);
+      }
+
+      if (coverLetterCopyTimeoutRef.current) {
+        window.clearTimeout(coverLetterCopyTimeoutRef.current);
       }
     };
   }, []);
@@ -173,10 +230,51 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
     }
   }
 
+  async function requestCoverLetter(sessionId: string) {
+    if (!analysis) {
+      setError("The roast snapshot is missing, so the cover letter cannot start.");
+      return;
+    }
+
+    setIsGeneratingCoverLetter(true);
+    setCoverLetterSessionId(sessionId);
+    setError(null);
+    setStatusMessage("Payment confirmed. Drafting your matching cover letter now...");
+
+    try {
+      const response = await fetch("/api/rewrite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          resumeText: analysis.normalizedResume,
+          resumeHash: analysis.resumeHash,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(getFriendlyFrontendError());
+      }
+
+      const payload = (await response.json()) as CoverLetterResult;
+      setCoverLetter(payload.coverLetter);
+      setStatusMessage("Matching cover letter ready. Copy it, tweak the company details, and send.");
+      window.setTimeout(() => {
+        document
+          .getElementById("cover-letter")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
+    } catch {
+      setError(getFriendlyFrontendError());
+    } finally {
+      setIsGeneratingCoverLetter(false);
+    }
+  }
+
   const verifySession = useEffectEvent(async (sessionId: string) => {
     setIsVerifyingPayment(true);
     setError(null);
-    setStatusMessage("Checking whether Stripe finished the $2.99 redemption...");
+    setStatusMessage("Checking whether Stripe finished the payment...");
 
     try {
       const response = await fetch(
@@ -189,6 +287,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
 
       const verification = (await response.json()) as {
         paid: boolean;
+        product: PremiumProduct | null;
         resumeHash: string | null;
       };
       if (!verification.paid) {
@@ -196,9 +295,10 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
         return;
       }
 
-      setPaidSessionId(sessionId);
       if (window.location.search.includes("session_id=")) {
-        window.history.replaceState({}, "", `${window.location.pathname}#premium-rewrite`);
+        const nextHash =
+          verification.product === "cover_letter" ? "#cover-letter" : "#premium-rewrite";
+        window.history.replaceState({}, "", `${window.location.pathname}${nextHash}`);
       }
 
       if (!analysis) {
@@ -211,6 +311,19 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
         return;
       }
 
+      if (verification.product === "cover_letter") {
+        setCoverLetterSessionId(sessionId);
+
+        if (!coverLetter || coverLetterSessionId !== sessionId) {
+          await requestCoverLetter(sessionId);
+          return;
+        }
+
+        setStatusMessage("Payment confirmed. Your matching cover letter is already unlocked.");
+        return;
+      }
+
+      setPaidSessionId(sessionId);
       if (!rewrite || paidSessionId !== sessionId) {
         await requestRewrite(sessionId);
         return;
@@ -248,6 +361,8 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
     setIsRoasting(true);
     setError(null);
     setRewrite(null);
+    setCoverLetter(null);
+    setCoverLetterSessionId(null);
     setPaidSessionId(null);
     setStatusMessage("Reading the PDF, judging the layout, and sharpening the jokes...");
 
@@ -275,7 +390,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
     }
   }
 
-  async function handleCheckout() {
+  async function handleCheckout(product: PremiumProduct = "polished_rewrite") {
     if (!analysis) {
       setError("Run the free roast first so there is something to improve.");
       return;
@@ -292,6 +407,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
           resumeText: analysis.normalizedResume,
           resumeHash: analysis.resumeHash,
           resumeName,
+          product,
         }),
       });
 
@@ -321,9 +437,54 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
     copyTimeoutRef.current = window.setTimeout(() => setDidCopy(false), 1800);
   }
 
+  async function handleCopyCoverLetter() {
+    if (!coverLetter) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(coverLetter);
+    setDidCopyCoverLetter(true);
+    if (coverLetterCopyTimeoutRef.current) {
+      window.clearTimeout(coverLetterCopyTimeoutRef.current);
+    }
+    coverLetterCopyTimeoutRef.current = window.setTimeout(
+      () => setDidCopyCoverLetter(false),
+      1800,
+    );
+  }
+
+  function handleEmailGateSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      return;
+    }
+
+    window.localStorage.setItem(emailStorageKey, normalizedEmail);
+    setEmail(normalizedEmail);
+    setEmailSubmitted(true);
+  }
+
+  function handleShareRoast() {
+    if (!analysis) {
+      return;
+    }
+
+    const tweetText = `My resume scored ${analysis.score}/100 on RoastMyCV 💀 "${analysis.lead}" — get yours roasted free at roast-my-cv-beige.vercel.app`;
+    const shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
+
+    window.open(shareUrl, "_blank", "noopener,noreferrer");
+  }
+
   const isBusy =
-    isRoasting || isCheckingOut || isVerifyingPayment || isRewriting;
+    isRoasting ||
+    isCheckingOut ||
+    isVerifyingPayment ||
+    isRewriting ||
+    isGeneratingCoverLetter;
   const paidUnlocked = Boolean(paidSessionId);
+  const shouldShowEmailGate = Boolean(analysis) && !emailSubmitted;
 
   return (
     <main className="relative overflow-hidden">
@@ -448,7 +609,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                     type="button"
                     className={secondaryButtonClass}
                     disabled={!analysis || isBusy}
-                    onClick={handleCheckout}
+                    onClick={() => void handleCheckout("polished_rewrite")}
                   >
                     {isCheckingOut ? (
                       <>
@@ -507,6 +668,41 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                 Your score, charges, and fixes land here after the upload.
               </p>
             </div>
+          ) : shouldShowEmailGate ? (
+            <div className="poster-shell rounded-[34px] p-8">
+              <div className="max-w-xl space-y-5">
+                <div className="space-y-3">
+                  <h3 className="text-3xl font-semibold tracking-tight">
+                    Your roast is ready. Where should we send updates?
+                  </h3>
+                  <p className="text-base leading-8 text-muted">
+                    Drop your email to unlock the results. No spam, just product updates.
+                  </p>
+                </div>
+
+                <form className="space-y-4" onSubmit={handleEmailGateSubmit}>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="you@careercomeback.com"
+                    required
+                    className="w-full rounded-[30px] border border-white/16 bg-black/18 px-5 py-4 text-base text-foreground outline-none transition placeholder:text-muted focus:border-lime/40 focus:bg-white/6"
+                  />
+                  <button type="submit" className={primaryButtonClass}>
+                    Show my roast
+                  </button>
+                </form>
+
+                <button
+                  type="button"
+                  className="text-sm text-muted transition hover:text-foreground"
+                  onClick={() => setEmailSubmitted(true)}
+                >
+                  Skip
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="grid gap-5 lg:grid-cols-[0.43fr_0.57fr]">
               <div className="poster-shell rounded-[34px] p-7">
@@ -520,8 +716,29 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                     <p className="text-sm text-muted">Resume health score</p>
                   </div>
                 </div>
+                <div className="mt-6 rounded-[24px] border border-white/10 bg-white/4 p-5">
+                  <p className="eyebrow text-[11px]">ATS score</p>
+                  <p
+                    className={`mt-3 text-7xl font-semibold leading-none tracking-[-0.08em] ${getAtsScoreClassName(
+                      analysis.atsScore,
+                    )}`}
+                  >
+                    {analysis.atsScore}
+                  </p>
+                  <p className="mt-3 text-sm leading-7 text-muted">
+                    {analysis.atsVerdict}
+                  </p>
+                </div>
                 <p className="mt-7 text-2xl font-semibold leading-tight">{analysis.lead}</p>
                 <p className="mt-4 text-base leading-8 text-muted">{analysis.summary}</p>
+                <button
+                  type="button"
+                  className={`${secondaryButtonClass} mt-5`}
+                  onClick={handleShareRoast}
+                >
+                  <Share2 className="h-4 w-4" />
+                  Share your roast
+                </button>
 
                 <div className="mt-7 rounded-[26px] border border-white/10 bg-white/4 p-5">
                   <p className="eyebrow text-[11px]">What already works</p>
@@ -588,7 +805,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                     type="button"
                     className={primaryButtonClass}
                     disabled={!analysis || isBusy}
-                    onClick={handleCheckout}
+                    onClick={() => void handleCheckout("polished_rewrite")}
                   >
                     {isCheckingOut ? (
                       <>
@@ -647,48 +864,149 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
               </div>
             </div>
 
-            <div className="poster-shell rounded-[34px] p-7">
-              {!rewrite ? (
-                <div className="space-y-5">
-                  <p className="text-2xl font-semibold tracking-tight">
-                    The premium version appears here after payment.
-                  </p>
-                  <div className="rounded-[24px] border border-white/10 bg-black/18 p-5 font-mono text-sm text-muted">
-                    <p># Candidate Name</p>
-                    <p className="mt-3">## Summary</p>
-                    <p className="mt-2">ATS-friendly rewrite appears here...</p>
-                    <p className="mt-3">## Experience</p>
-                    <p className="mt-2">- Stronger action verbs, cleaner bullets, no fluff.</p>
+            <div className="space-y-5">
+              <div className="poster-shell rounded-[34px] p-7">
+                {!rewrite ? (
+                  <div className="space-y-5">
+                    <p className="text-2xl font-semibold tracking-tight">
+                      The premium version appears here after payment.
+                    </p>
+                    <div className="rounded-[24px] border border-white/10 bg-black/18 p-5 font-mono text-sm text-muted">
+                      <p># Candidate Name</p>
+                      <p className="mt-3">## Summary</p>
+                      <p className="mt-2">ATS-friendly rewrite appears here...</p>
+                      <p className="mt-3">## Experience</p>
+                      <p className="mt-2">- Stronger action verbs, cleaner bullets, no fluff.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="space-y-3">
+                      <p className="eyebrow">Unlocked rewrite</p>
+                      <h3 className="text-3xl font-semibold tracking-tight">{rewrite.title}</h3>
+                      <p className="text-base leading-8 text-muted">{rewrite.positioning}</p>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      {rewrite.improvements.map((improvement) => (
+                        <div
+                          key={improvement}
+                          className="rounded-[22px] border border-lime/16 bg-lime/8 p-4 text-sm leading-7 text-foreground/88"
+                        >
+                          {improvement}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="rounded-[28px] border border-white/10 bg-black/18 p-5">
+                      <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[13px] leading-7 text-foreground/90">
+                        {rewrite.polishedResume}
+                      </pre>
+                    </div>
+
+                    <div className="rounded-[22px] border border-white/10 bg-white/4 p-4 text-sm leading-7 text-muted">
+                      {rewrite.finalNote}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {rewrite && !coverLetterSessionId && (
+                <div className="poster-shell rounded-[34px] p-7">
+                  <div className="space-y-4">
+                    <p className="eyebrow">One more thing</p>
+                    <h3 className="text-3xl font-semibold tracking-tight">
+                      Want a matching cover letter?
+                    </h3>
+                    <p className="text-base leading-8 text-muted">
+                      We already know your resume. A tailored cover letter takes 10 seconds and costs $1.99.
+                    </p>
+                    <button
+                      type="button"
+                      className={primaryButtonClass}
+                      disabled={isBusy}
+                      onClick={() => void handleCheckout("cover_letter")}
+                    >
+                      {isCheckingOut ? (
+                        <>
+                          <LoaderCircle className="h-4 w-4 animate-spin" />
+                          Opening Stripe...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4" />
+                          Get cover letter — $1.99
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
-              ) : (
-                <div className="space-y-6">
-                  <div className="space-y-3">
-                    <p className="eyebrow">Unlocked rewrite</p>
-                    <h3 className="text-3xl font-semibold tracking-tight">{rewrite.title}</h3>
-                    <p className="text-base leading-8 text-muted">{rewrite.positioning}</p>
-                  </div>
+              )}
 
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    {rewrite.improvements.map((improvement) => (
-                      <div
-                        key={improvement}
-                        className="rounded-[22px] border border-lime/16 bg-lime/8 p-4 text-sm leading-7 text-foreground/88"
-                      >
-                        {improvement}
+              {rewrite && coverLetterSessionId && (
+                <div id="cover-letter" className="poster-shell rounded-[34px] p-7">
+                  {!coverLetter ? (
+                    <div className="space-y-5">
+                      <div className="space-y-3">
+                        <p className="eyebrow">Matching cover letter</p>
+                        <h3 className="text-3xl font-semibold tracking-tight">
+                          Your cover letter is on deck.
+                        </h3>
+                        <p className="text-base leading-8 text-muted">
+                          We’re shaping a short, tailored letter from the same resume snapshot.
+                        </p>
                       </div>
-                    ))}
-                  </div>
+                      {isGeneratingCoverLetter ? (
+                        <div className="flex items-center gap-3 text-sm text-lime">
+                          <LoaderCircle className="h-4 w-4 animate-spin" />
+                          Generating cover letter...
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className={primaryButtonClass}
+                          onClick={() => void requestCoverLetter(coverLetterSessionId)}
+                        >
+                          <Sparkles className="h-4 w-4" />
+                          Generate cover letter
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="space-y-3">
+                          <p className="eyebrow">Matching cover letter</p>
+                          <h3 className="text-3xl font-semibold tracking-tight">
+                            Ready to send with the rewrite.
+                          </h3>
+                        </div>
+                        <button
+                          type="button"
+                          className={secondaryButtonClass}
+                          onClick={handleCopyCoverLetter}
+                        >
+                          {didCopyCoverLetter ? (
+                            <>
+                              <Check className="h-4 w-4" />
+                              Copied
+                            </>
+                          ) : (
+                            <>
+                              <Clipboard className="h-4 w-4" />
+                              Copy cover letter
+                            </>
+                          )}
+                        </button>
+                      </div>
 
-                  <div className="rounded-[28px] border border-white/10 bg-black/18 p-5">
-                    <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[13px] leading-7 text-foreground/90">
-                      {rewrite.polishedResume}
-                    </pre>
-                  </div>
-
-                  <div className="rounded-[22px] border border-white/10 bg-white/4 p-4 text-sm leading-7 text-muted">
-                    {rewrite.finalNote}
-                  </div>
+                      <div className="rounded-[28px] border border-white/10 bg-black/18 p-5">
+                        <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[13px] leading-7 text-foreground/90">
+                          {coverLetter}
+                        </pre>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

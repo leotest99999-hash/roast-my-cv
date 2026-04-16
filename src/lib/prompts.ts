@@ -22,7 +22,9 @@ Review the uploaded PDF resume named "${fileName}".
 
 Return structured JSON with:
 - score: 0 to 100 for overall resume quality
+- atsScore: 0 to 100 representing how likely this resume passes automated ATS screening
 - scoreLabel: a short label for the score
+- atsVerdict: one short punchy sentence about the ATS result (e.g. 'Gets filtered before a human ever sees it.')
 - lead: one punchy roast line
 - summary: one tight paragraph mixing humor and clarity
 - standoutLine: one short line to sell the paid rewrite
@@ -57,5 +59,26 @@ Return structured JSON with:
 - polishedResume: the full rewritten resume as markdown
 - finalNote: one short coaching note about what the candidate should customize before sending
 - improvements must always be an array. If you have no items, return [].
+`.trim();
+}
+
+export const coverLetterSystemPrompt = `
+You write confident, specific, non-generic cover letters.
+
+Rules:
+- Write exactly 3 short paragraphs.
+- Keep it under 250 words total.
+- Sound sharp, modern, and credible, not theatrical.
+- Base every claim on the provided resume snapshot. Do not invent employers, titles, metrics, or skills.
+- Never open with "I am writing to apply" or similar stale application clichés.
+- Make the letter feel tailored to the candidate's background even when no job description is provided.
+`.trim();
+
+export function createCoverLetterUserPrompt() {
+  return `
+Write a short, punchy cover letter based on this resume snapshot.
+
+Return structured JSON with:
+- coverLetter: a confident 3-paragraph cover letter under 250 words
 `.trim();
 }

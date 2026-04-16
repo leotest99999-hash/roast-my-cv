@@ -1,8 +1,13 @@
 import { jsonApiError, logApiError } from "@/lib/api-errors";
 import { createStructuredGroqCompletion } from "@/lib/groq";
 import { normalizeResumeText, sha256 } from "@/lib/hash";
-import { createRewriteUserPrompt, rewriteSystemPrompt } from "@/lib/prompts";
-import { rewriteResultSchema } from "@/lib/schemas";
+import {
+  coverLetterSystemPrompt,
+  createCoverLetterUserPrompt,
+  createRewriteUserPrompt,
+  rewriteSystemPrompt,
+} from "@/lib/prompts";
+import { coverLetterResultSchema, rewriteResultSchema } from "@/lib/schemas";
 import { getStripeClient } from "@/lib/stripe";
 
 export const runtime = "nodejs";
@@ -35,14 +40,15 @@ export async function POST(request: Request) {
 
     const stripe = getStripeClient();
     const session = await stripe.checkout.sessions.retrieve(body.sessionId);
+    const product = session.metadata?.product;
     const paid =
       session.status === "complete" &&
       session.payment_status === "paid" &&
-      session.metadata?.product === "polished_rewrite";
+      (product === "polished_rewrite" || product === "cover_letter");
 
     if (!paid) {
       return jsonApiError(
-        "We couldn't confirm payment for this rewrite yet. Please try again in a moment.",
+        "We couldn't confirm payment for this premium unlock yet. Please try again in a moment.",
         403,
       );
     }
@@ -52,6 +58,18 @@ export async function POST(request: Request) {
         "We couldn't match this payment to the current roast. Please roast your resume again and retry.",
         403,
       );
+    }
+
+    if (product === "cover_letter") {
+      const groqResult = await createStructuredGroqCompletion({
+        schema: coverLetterResultSchema,
+        systemPrompt: coverLetterSystemPrompt,
+        userPrompt: `${createCoverLetterUserPrompt()}\n\nResume snapshot:\n\n${normalizedResume}`,
+      });
+
+      return Response.json({
+        coverLetter: normalizeResumeText(groqResult.coverLetter),
+      });
     }
 
     const groqResult = await createStructuredGroqCompletion({

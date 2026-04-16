@@ -10,6 +10,7 @@ export async function POST(request: Request) {
       resumeText?: string;
       resumeHash?: string;
       resumeName?: string;
+      product?: string;
     };
 
     const normalizedResume = normalizeResumeText(body.resumeText ?? "");
@@ -32,6 +33,21 @@ export async function POST(request: Request) {
     const stripe = getStripeClient();
     const origin =
       process.env.NEXT_PUBLIC_APP_URL || request.headers.get("origin") || new URL(request.url).origin;
+    const product = body.product === "cover_letter" ? "cover_letter" : "polished_rewrite";
+    const priceConfig =
+      product === "cover_letter"
+        ? {
+            unitAmount: 199,
+            name: "RoastMyCV cover letter",
+            description:
+              "One tailored cover letter generated from the roasted resume snapshot.",
+          }
+        : {
+            unitAmount: 299,
+            name: "RoastMyCV polished rewrite",
+            description:
+              "One premium resume rewrite tied to the roasted snapshot from this upload.",
+          };
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -44,18 +60,17 @@ export async function POST(request: Request) {
           quantity: 1,
           price_data: {
             currency: "usd",
-            unit_amount: 299,
+            unit_amount: priceConfig.unitAmount,
             product_data: {
-              name: "RoastMyCV polished rewrite",
-              description:
-                "One premium resume rewrite tied to the roasted snapshot from this upload.",
+              name: priceConfig.name,
+              description: priceConfig.description,
             },
           },
         },
       ],
       metadata: {
         app: "RoastMyCV",
-        product: "polished_rewrite",
+        product,
         resumeHash: computedHash,
         resumeName: body.resumeName?.slice(0, 200) ?? "resume.pdf",
       },

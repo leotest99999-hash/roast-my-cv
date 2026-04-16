@@ -16,7 +16,9 @@ export const roastIssueSchema = z.object({
 
 export const roastAnalysisSchema = z.object({
   score: z.number().int().min(0).max(100),
+  atsScore: z.number().int().min(0).max(100),
   scoreLabel: groqString(2, 2000),
+  atsVerdict: groqString(10, 2000),
   lead: groqString(40, 2000),
   summary: groqString(40, 2000),
   standoutLine: groqString(20, 2000),
@@ -38,9 +40,14 @@ export const rewriteResultSchema = z.object({
   finalNote: groqString(20, 2000),
 });
 
+export const coverLetterResultSchema = z.object({
+  coverLetter: groqString(80, 2000),
+});
+
 export type RoastIssue = z.infer<typeof roastIssueSchema>;
 export type RoastAnalysis = z.infer<typeof roastAnalysisSchema>;
 export type RoastResult = RoastAnalysis & {
   resumeHash: string;
 };
 export type RewriteResult = z.infer<typeof rewriteResultSchema>;
+export type CoverLetterResult = z.infer<typeof coverLetterResultSchema>;

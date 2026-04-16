@@ -17,13 +17,15 @@ export async function GET(request: Request) {
 
     const stripe = getStripeClient();
     const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const product = session.metadata?.product ?? null;
     const paid =
       session.status === "complete" &&
       session.payment_status === "paid" &&
-      session.metadata?.product === "polished_rewrite";
+      (product === "polished_rewrite" || product === "cover_letter");
 
     return Response.json({
       paid,
+      product,
       resumeHash: session.metadata?.resumeHash ?? null,
       customerEmail:
         session.customer_details?.email || session.customer_email || null,
