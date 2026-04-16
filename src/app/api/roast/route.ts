@@ -26,10 +26,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const arrayBuffer = await resume.arrayBuffer();
-    const buffer = Buffer.from(new Uint8Array(arrayBuffer));
+    const blob = new Blob([await resume.arrayBuffer()]);
+    const arrayBuffer = await blob.arrayBuffer();
+    const pdfBuffer = Buffer.from(arrayBuffer);
+    console.log("[roast] received upload", {
+      fileName: resume.name,
+      fileSize: resume.size,
+      bufferLength: pdfBuffer.length,
+    });
     const nameLooksLikePdf = resume.name.toLowerCase().endsWith(".pdf");
-    const signatureLooksLikePdf = hasPdfSignature(buffer);
+    const signatureLooksLikePdf = hasPdfSignature(pdfBuffer);
 
     if (!nameLooksLikePdf && !signatureLooksLikePdf) {
       return jsonApiError("RoastMyCV only accepts PDF resumes right now.", 400);
@@ -39,7 +45,7 @@ export async function POST(request: Request) {
 
     try {
       extractedResumeText = normalizeResumeText(
-        await extractPdfText(buffer, { fileName: resume.name }),
+        await extractPdfText(pdfBuffer, { fileName: resume.name }),
       );
     } catch (pdfError) {
       logApiError("roast:pdf-extraction", pdfError);
