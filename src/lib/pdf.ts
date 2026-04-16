@@ -56,7 +56,39 @@ function getErrorDetails(error: unknown) {
   };
 }
 
+async function ensurePdfJsNodePolyfills() {
+  if (typeof globalThis.DOMMatrix === "undefined") {
+    const { default: DOMMatrix } = await import("@thednp/dommatrix");
+    Object.assign(globalThis, { DOMMatrix });
+  }
+
+  if (typeof globalThis.ImageData === "undefined") {
+    class ImageDataShim {
+      data: Uint8ClampedArray;
+      width: number;
+      height: number;
+
+      constructor(data: Uint8ClampedArray, width: number, height: number) {
+        this.data = data;
+        this.width = width;
+        this.height = height;
+      }
+    }
+
+    Object.assign(globalThis, { ImageData: ImageDataShim });
+  }
+
+  if (typeof globalThis.Path2D === "undefined") {
+    class Path2DShim {
+      addPath() {}
+    }
+
+    Object.assign(globalThis, { Path2D: Path2DShim });
+  }
+}
+
 async function extractTextWithPdfJsDist(uint8Array: Uint8Array) {
+  await ensurePdfJsNodePolyfills();
   const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
   pdfjsLib.GlobalWorkerOptions.workerSrc = "";
 
