@@ -4,6 +4,7 @@ import {
   BadgeDollarSign,
   Check,
   Clipboard,
+  Download,
   FileUp,
   Flame,
   LoaderCircle,
@@ -38,6 +39,13 @@ const storageKey = "roastmycv-session-v1";
 const emailStorageKey = "roastmycv-email";
 const genericFrontendErrorMessage =
   "Something went wrong, please try again in a moment.";
+const roastLoadingMessages = [
+  "Reading your resume...",
+  "Cringing at the buzzwords...",
+  "Sharpening the jokes...",
+  "Checking the ATS damage...",
+  "Almost done roasting...",
+] as const;
 const primaryButtonClass =
   "inline-flex w-full items-center justify-center gap-2 rounded-full border border-coral/40 bg-coral px-5 py-3 text-sm font-semibold text-[#180f0a] transition hover:bg-[#ff7f65] sm:w-auto disabled:cursor-not-allowed disabled:opacity-45";
 const secondaryButtonClass =
@@ -117,11 +125,14 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
   const [error, setError] = useState<string | null>(null);
   const [didCopy, setDidCopy] = useState(false);
   const [didCopyCoverLetter, setDidCopyCoverLetter] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [isRoasting, setIsRoasting] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
   const [isRewriting, setIsRewriting] = useState(false);
   const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
+  const [roastLoadingIndex, setRoastLoadingIndex] = useState(0);
+  const [roastProgress, setRoastProgress] = useState(0);
   const processedSessionRef = useRef<string | null>(null);
   const copyTimeoutRef = useRef<number | null>(null);
   const coverLetterCopyTimeoutRef = useRef<number | null>(null);
@@ -188,6 +199,41 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!isRoasting) {
+      setRoastLoadingIndex(0);
+      setRoastProgress(0);
+      return;
+    }
+
+    setRoastLoadingIndex(0);
+    setRoastProgress(12);
+
+    const messageInterval = window.setInterval(() => {
+      setRoastLoadingIndex(
+        (currentIndex) => (currentIndex + 1) % roastLoadingMessages.length,
+      );
+    }, 2300);
+
+    const progressInterval = window.setInterval(() => {
+      setRoastProgress((currentProgress) => {
+        if (currentProgress >= 94) {
+          return currentProgress;
+        }
+
+        return Math.min(
+          94,
+          currentProgress + Math.max(1.25, (100 - currentProgress) * 0.045),
+        );
+      });
+    }, 180);
+
+    return () => {
+      window.clearInterval(messageInterval);
+      window.clearInterval(progressInterval);
+    };
+  }, [isRoasting]);
 
   async function requestRewrite(sessionId: string) {
     if (!analysis) {
@@ -380,6 +426,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
       }
 
       const payload = (await response.json()) as RoastResult;
+      setRoastProgress(100);
       setAnalysis(payload);
       setResumeName(selectedFile.name);
       setStatusMessage("Roast complete. If it stings in the right places, the rewrite button is live.");
@@ -437,6 +484,151 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
     copyTimeoutRef.current = window.setTimeout(() => setDidCopy(false), 1800);
   }
 
+  async function handleDownloadPdf() {
+    if (!rewrite) {
+      return;
+    }
+
+    setIsDownloadingPdf(true);
+    setError(null);
+
+    try {
+      const { jsPDF } = await import("jspdf");
+      const pdf = new jsPDF({
+        unit: "pt",
+        format: "letter",
+        compress: true,
+      });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const marginX = 54;
+      const topMargin = 56;
+      const bottomMargin = 54;
+      const contentWidth = pageWidth - marginX * 2;
+      const markdownLines = rewrite.polishedResume.replace(/\r\n/g, "\n").split("\n");
+      let cursorY = topMargin;
+
+      const ensureSpace = (blockHeight: number) => {
+        if (cursorY + blockHeight <= pageHeight - bottomMargin) {
+          return;
+        }
+
+        pdf.addPage();
+        cursorY = topMargin;
+      };
+
+      const writeWrappedText = ({
+        text,
+        fontSize,
+        lineHeight,
+        after,
+        style = "normal",
+        x = marginX,
+        width = contentWidth,
+      }: {
+        text: string;
+        fontSize: number;
+        lineHeight: number;
+        after: number;
+        style?: "normal" | "bold";
+        x?: number;
+        width?: number;
+      }) => {
+        pdf.setFont("helvetica", style);
+        pdf.setFontSize(fontSize);
+
+        const lines = pdf.splitTextToSize(text, width);
+        const blockHeight = lines.length * lineHeight;
+
+        ensureSpace(blockHeight);
+        pdf.text(lines, x, cursorY, { baseline: "top" });
+        cursorY += blockHeight + after;
+      };
+
+      pdf.setProperties({
+        title: rewrite.title,
+        subject: "RoastMyCV polished resume",
+      });
+      pdf.setTextColor(18, 20, 24);
+
+      for (const rawLine of markdownLines) {
+        const line = rawLine.trim();
+
+        if (!line) {
+          cursorY += 10;
+          continue;
+        }
+
+        if (line.startsWith("# ")) {
+          writeWrappedText({
+            text: line.slice(2).trim(),
+            fontSize: 22,
+            lineHeight: 24,
+            after: 18,
+            style: "bold",
+          });
+          continue;
+        }
+
+        if (line.startsWith("## ")) {
+          cursorY += 4;
+          writeWrappedText({
+            text: line.slice(3).trim().toUpperCase(),
+            fontSize: 11,
+            lineHeight: 14,
+            after: 8,
+            style: "bold",
+          });
+          continue;
+        }
+
+        if (line.startsWith("- ")) {
+          const bulletIndent = 16;
+          const bulletText = line.slice(2).trim();
+
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(11);
+
+          const bulletLines = pdf.splitTextToSize(
+            bulletText,
+            contentWidth - bulletIndent,
+          );
+          const blockHeight = bulletLines.length * 16;
+
+          ensureSpace(blockHeight);
+          pdf.text("-", marginX, cursorY, { baseline: "top" });
+          pdf.text(bulletLines, marginX + bulletIndent, cursorY, {
+            baseline: "top",
+          });
+          cursorY += blockHeight + 6;
+          continue;
+        }
+
+        writeWrappedText({
+          text: line,
+          fontSize: 11,
+          lineHeight: 16,
+          after: 8,
+        });
+      }
+
+      const safeBaseName =
+        resumeName
+          ?.replace(/\.pdf$/i, "")
+          .replace(/[^a-zA-Z0-9-_]+/g, "-")
+          .replace(/-+/g, "-")
+          .replace(/^-|-$/g, "")
+          .toLowerCase() || "resume";
+
+      pdf.save(`${safeBaseName}-rewrite.pdf`);
+      setStatusMessage("PDF downloaded. Give it one last proofread before sending.");
+    } catch {
+      setError(getFriendlyFrontendError());
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  }
+
   async function handleCopyCoverLetter() {
     if (!coverLetter) {
       return;
@@ -471,12 +663,13 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
       return;
     }
 
-    const tweetText = `My resume scored ${analysis.score}/100 on RoastMyCV 💀 "${analysis.lead}" — get yours roasted free at roast-my-cv-beige.vercel.app`;
+    const tweetText = `My resume scored ${analysis.score}/100 on RoastMyCV \u{1F480} "${analysis.lead}" - get yours roasted free at roast-my-cv-beige.vercel.app`;
     const shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
 
     window.open(shareUrl, "_blank", "noopener,noreferrer");
   }
 
+  const currentRoastLoadingMessage = roastLoadingMessages[roastLoadingIndex];
   const isBusy =
     isRoasting ||
     isCheckingOut ||
@@ -634,9 +827,28 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
               <div className="rounded-[24px] border border-white/10 bg-white/4 p-4 sm:rounded-[26px] sm:p-5">
                 <p className="eyebrow text-[11px]">Current status</p>
                 <p className="mt-3 text-base font-semibold">
-                  {statusMessage || "Waiting for a PDF worth arguing with."}
+                  {isRoasting
+                    ? "Premium roast in progress"
+                    : statusMessage || "Waiting for a PDF worth arguing with."}
                 </p>
-                {(isVerifyingPayment || isRewriting) && (
+                {isRoasting && (
+                  <div className="mt-4 rounded-[20px] border border-lime/18 bg-lime/7 p-4">
+                    <div className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-lime">
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                      Roast engine live
+                    </div>
+                    <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-coral via-gold to-lime transition-[width] duration-700 ease-out"
+                        style={{ width: `${roastProgress}%` }}
+                      />
+                    </div>
+                    <p className="mt-3 text-sm leading-7 text-foreground/88">
+                      {currentRoastLoadingMessage}
+                    </p>
+                  </div>
+                )}
+                {(isVerifyingPayment || isRewriting || isGeneratingCoverLetter) && !isRoasting && (
                   <LoaderCircle className="mt-3 h-5 w-5 animate-spin text-lime" />
                 )}
                 {error && (
@@ -861,6 +1073,26 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                     </>
                   )}
                 </button>
+                {rewrite && (
+                  <button
+                    type="button"
+                    className={secondaryButtonClass}
+                    disabled={isDownloadingPdf}
+                    onClick={() => void handleDownloadPdf()}
+                  >
+                    {isDownloadingPdf ? (
+                      <>
+                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                        Building PDF...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4" />
+                        Download as PDF
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -935,7 +1167,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                       ) : (
                         <>
                           <Sparkles className="h-4 w-4" />
-                          Get cover letter — $1.99
+                          Get cover letter - $1.99
                         </>
                       )}
                     </button>
@@ -953,7 +1185,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                           Your cover letter is on deck.
                         </h3>
                         <p className="text-base leading-8 text-muted">
-                          We’re shaping a short, tailored letter from the same resume snapshot.
+                          We&apos;re shaping a short, tailored letter from the same resume snapshot.
                         </p>
                       </div>
                       {isGeneratingCoverLetter ? (
