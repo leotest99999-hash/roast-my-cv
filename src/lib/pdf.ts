@@ -58,7 +58,7 @@ export async function extractPdfText(
   arrayBuffer: ArrayBuffer,
   options: ExtractPdfTextOptions = {},
 ) {
-  const uint8Array = new Uint8Array(arrayBuffer);
+  const uint8Array = new Uint8Array(arrayBuffer.slice(0));
 
   if (!uint8Array.length) {
     throw new PdfExtractionError(

@@ -27,13 +27,14 @@ export async function POST(request: Request) {
     }
 
     const arrayBuffer = await resume.arrayBuffer();
+    const copiedBuffer = arrayBuffer.slice(0);
     console.log("[roast] received upload", {
       fileName: resume.name,
       fileSize: resume.size,
-      bufferLength: arrayBuffer.byteLength,
+      bufferLength: copiedBuffer.byteLength,
     });
     const nameLooksLikePdf = resume.name.toLowerCase().endsWith(".pdf");
-    const signatureLooksLikePdf = hasPdfSignature(arrayBuffer);
+    const signatureLooksLikePdf = hasPdfSignature(copiedBuffer);
 
     if (!nameLooksLikePdf && !signatureLooksLikePdf) {
       return jsonApiError("RoastMyCV only accepts PDF resumes right now.", 400);
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
 
     try {
       extractedResumeText = normalizeResumeText(
-        await extractPdfText(arrayBuffer, { fileName: resume.name }),
+        await extractPdfText(copiedBuffer, { fileName: resume.name }),
       );
     } catch (pdfError) {
       logApiError("roast:pdf-extraction", pdfError);
