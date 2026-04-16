@@ -9,10 +9,11 @@ export class PdfExtractionError extends Error {
 }
 
 export function hasPdfSignature(pdfBuffer: Buffer | Uint8Array) {
-  const maxOffset = Math.min(
-    pdfBuffer.length - pdfHeader.length,
-    pdfHeaderSearchWindow - pdfHeader.length,
+  const headerWindow = pdfBuffer.subarray(
+    0,
+    Math.min(pdfBuffer.length, pdfHeaderSearchWindow),
   );
+  const maxOffset = headerWindow.length - pdfHeader.length;
 
   if (maxOffset < 0) {
     return false;
@@ -20,7 +21,7 @@ export function hasPdfSignature(pdfBuffer: Buffer | Uint8Array) {
 
   for (let offset = 0; offset <= maxOffset; offset += 1) {
     const isHeaderMatch = pdfHeader.every(
-      (byte, index) => pdfBuffer[offset + index] === byte,
+      (byte, index) => headerWindow[offset + index] === byte,
     );
 
     if (isHeaderMatch) {
@@ -31,14 +32,23 @@ export function hasPdfSignature(pdfBuffer: Buffer | Uint8Array) {
   return false;
 }
 
-export async function extractPdfText(pdfBuffer: Buffer) {
+type ExtractPdfTextOptions = {
+  fileName?: string | null;
+};
+
+export async function extractPdfText(
+  pdfBuffer: Buffer,
+  options: ExtractPdfTextOptions = {},
+) {
   if (!pdfBuffer.length) {
     throw new PdfExtractionError(
       "That upload looks empty. Please export the PDF again and retry.",
     );
   }
 
-  if (!hasPdfSignature(pdfBuffer)) {
+  const fileNameLooksLikePdf = options.fileName?.toLowerCase().endsWith(".pdf");
+
+  if (!hasPdfSignature(pdfBuffer) && !fileNameLooksLikePdf) {
     throw new PdfExtractionError(
       "That file doesn't look like a valid PDF. Please upload a PDF resume and try again.",
     );

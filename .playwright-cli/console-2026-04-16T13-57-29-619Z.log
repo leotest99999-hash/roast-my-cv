@@ -70,3 +70,5 @@
 [ 1658139ms] [LOG] [Fast Refresh] done in 151ms @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
 [ 1715298ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
 [ 1715363ms] [LOG] [Fast Refresh] done in 173ms @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[ 2227662ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[ 2227680ms] [LOG] [Fast Refresh] done in 123ms @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
