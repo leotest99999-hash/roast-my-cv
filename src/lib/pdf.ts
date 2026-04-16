@@ -1,10 +1,7 @@
-import { createRequire } from "node:module";
-import { pathToFileURL } from "node:url";
 import type { Output, Text } from "pdf2json";
 
 const pdfHeader = [0x25, 0x50, 0x44, 0x46, 0x2d] as const;
 const pdfHeaderSearchWindow = 1024;
-const require = createRequire(import.meta.url);
 
 export class PdfExtractionError extends Error {
   constructor(message: string) {
@@ -41,6 +38,12 @@ export function hasPdfSignature(pdfInput: ArrayBuffer | Uint8Array) {
 
 type ExtractPdfTextOptions = {
   fileName?: string | null;
+};
+
+type GlobalWithPdfJsWorker = typeof globalThis & {
+  pdfjsWorker?: {
+    WorkerMessageHandler?: unknown;
+  };
 };
 
 function getErrorDetails(error: unknown) {
@@ -90,14 +93,34 @@ async function ensurePdfJsNodePolyfills() {
   }
 }
 
+async function ensurePdfJsWorkerModule() {
+  const globalWithPdfJsWorker = globalThis as GlobalWithPdfJsWorker;
+
+  if (!globalWithPdfJsWorker.pdfjsWorker) {
+    const workerModule = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
+    Object.assign(globalWithPdfJsWorker, { pdfjsWorker: workerModule });
+  }
+}
+
+function decodePdf2JsonText(encodedText: string) {
+  try {
+    return decodeURIComponent(encodedText.replace(/\+/g, "%20"));
+  } catch {
+    return encodedText;
+  }
+}
+
 async function extractTextWithPdfJsDist(uint8Array: Uint8Array) {
   await ensurePdfJsNodePolyfills();
+  await ensurePdfJsWorkerModule();
   const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  pdfjsLib.GlobalWorkerOptions.workerSrc = pathToFileURL(
-    require.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs"),
-  ).toString();
 
-  const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+  const loadingTask = pdfjsLib.getDocument({
+    data: uint8Array,
+    useWorkerFetch: false,
+    isOffscreenCanvasSupported: false,
+    isImageDecoderSupported: false,
+  });
   const pdf = await loadingTask.promise;
   const pages = await Promise.all(
     Array.from({ length: pdf.numPages }, (_, index) =>
@@ -134,7 +157,7 @@ async function extractTextWithPdf2Json(arrayBuffer: ArrayBuffer) {
 
   return parsed.Pages.flatMap((page) =>
     page.Texts.map((textItem: Text) =>
-      decodeURIComponent(textItem.R[0]?.T ?? ""),
+      decodePdf2JsonText(textItem.R[0]?.T ?? ""),
     ),
   ).join(" ");
 }
