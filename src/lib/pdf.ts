@@ -72,54 +72,30 @@ export async function extractPdfText(
 
   try {
     const { extractText } = await import("unpdf");
-    const attemptExtraction = async (
-      input: Buffer | Uint8Array,
-      attempt: 1 | 2,
-      description: string,
-    ) => {
-      try {
-        return await extractText(input, {
-          mergePages: true,
-        });
-      } catch (error) {
-        const details = getErrorDetails(error);
-
-        console.error(`[pdf] unpdf extraction attempt ${attempt} failed`, {
-          attempt,
-          description,
-          fileName: options.fileName ?? null,
-          bufferLength: input.length,
-          errorName: details.name,
-          errorMessage: details.message,
-          errorStack: details.stack,
-        });
-
-        throw error;
-      }
-    };
-
+    const pdfBytes = new Uint8Array(
+      pdfBuffer.buffer,
+      pdfBuffer.byteOffset,
+      pdfBuffer.byteLength,
+    );
     let result: Awaited<ReturnType<typeof extractText>>;
 
     try {
-      result = await attemptExtraction(pdfBuffer, 1, "buffer");
-    } catch (firstError) {
-      const retryBuffer = Uint8Array.from(pdfBuffer);
+      result = await extractText(pdfBytes, {
+        mergePages: true,
+      });
+    } catch (error) {
+      const details = getErrorDetails(error);
 
-      console.error("[pdf] retrying unpdf extraction with plain Uint8Array", {
+      console.error("[pdf] unpdf extraction failed", {
         fileName: options.fileName ?? null,
-        originalBufferLength: pdfBuffer.length,
-        retryBufferLength: retryBuffer.length,
+        bufferLength: pdfBuffer.length,
+        uint8ArrayLength: pdfBytes.length,
+        errorName: details.name,
+        errorMessage: details.message,
+        errorStack: details.stack,
       });
 
-      try {
-        result = await attemptExtraction(
-          retryBuffer,
-          2,
-          "plain-uint8array-retry",
-        );
-      } catch {
-        throw firstError;
-      }
+      throw error;
     }
 
     const text = typeof result?.text === "string" ? result.text : "";
