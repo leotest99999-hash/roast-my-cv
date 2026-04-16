@@ -152,3 +152,17 @@
 [ 8084091ms] [LOG] [Fast Refresh] done in 123ms @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
 [ 8117501ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
 [ 8117502ms] [LOG] [Fast Refresh] done in 109ms @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[15976330ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[15976618ms] [LOG] [Fast Refresh] done in 389ms @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[15979375ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[15979438ms] [LOG] [Fast Refresh] done in 173ms @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[15989750ms] [LOG] [HMR] connected @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[15991776ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[15991830ms] [LOG] [HMR] connected @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[15992069ms] [LOG] %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[15992070ms] [LOG] %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {route: /, path: /} @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[15992070ms] [LOG] %c[Vercel Web Analytics]%c [view] http://127.0.0.1:3001/ color: rgb(120, 120, 120) color: inherit {o: http://127.0.0.1:3001/, sv: 0.1.3, sdkn: @vercel/analytics/next, sdkv: 2.0.1, ts: 1776363841689} /_vercel/insights/view @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[16029012ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[16029100ms] [LOG] [Fast Refresh] done in 196ms @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[16043954ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[16044127ms] [LOG] [Fast Refresh] done in 279ms @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431

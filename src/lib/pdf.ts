@@ -56,6 +56,52 @@ function getErrorDetails(error: unknown) {
   };
 }
 
+async function extractTextWithPdfJsDist(uint8Array: Uint8Array) {
+  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "";
+
+  const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+  const pdf = await loadingTask.promise;
+  const pages = await Promise.all(
+    Array.from({ length: pdf.numPages }, (_, index) =>
+      pdf
+        .getPage(index + 1)
+        .then((page) => page.getTextContent())
+        .then((textContent) =>
+          textContent.items
+            .map((item) =>
+              "str" in item && typeof item.str === "string" ? item.str : "",
+            )
+            .join(" "),
+        ),
+    ),
+  );
+
+  return pages.join("\n");
+}
+
+async function extractTextWithPdf2Json(arrayBuffer: ArrayBuffer) {
+  const { default: PDFParser } = await import("pdf2json");
+  const PDFParserWithRawText = PDFParser as unknown as new (
+    context: null,
+    needRawText: number,
+  ) => InstanceType<typeof PDFParser>;
+  const pdfParser = new PDFParserWithRawText(null, 1);
+  const parsed = await new Promise<Output>((resolve, reject) => {
+    pdfParser.on("pdfParser_dataReady", resolve);
+    pdfParser.on("pdfParser_dataError", (err) =>
+      reject(err instanceof Error ? err : err.parserError),
+    );
+    pdfParser.parseBuffer(Buffer.from(arrayBuffer));
+  });
+
+  return parsed.Pages.flatMap((page) =>
+    page.Texts.map((textItem: Text) =>
+      decodeURIComponent(textItem.R[0]?.T ?? ""),
+    ),
+  ).join(" ");
+}
+
 export async function extractPdfText(
   arrayBuffer: ArrayBuffer,
   options: ExtractPdfTextOptions = {},
@@ -77,40 +123,38 @@ export async function extractPdfText(
   }
 
   try {
-    const { default: PDFParser } = await import("pdf2json");
-    const PDFParserWithRawText = PDFParser as unknown as new (
-      context: null,
-      needRawText: number,
-    ) => InstanceType<typeof PDFParser>;
     let text = "";
 
     try {
-      const pdfParser = new PDFParserWithRawText(null, 1);
-      const parsed = await new Promise<Output>((resolve, reject) => {
-        pdfParser.on("pdfParser_dataReady", resolve);
-        pdfParser.on("pdfParser_dataError", (err) =>
-          reject(err instanceof Error ? err : err.parserError),
-        );
-        pdfParser.parseBuffer(Buffer.from(arrayBuffer));
-      });
-      text = parsed.Pages.flatMap((page) =>
-        page.Texts.map((textItem: Text) =>
-          decodeURIComponent(textItem.R[0]?.T ?? ""),
-        ),
-      ).join(" ");
-    } catch (error) {
-      const details = getErrorDetails(error);
+      text = await extractTextWithPdfJsDist(uint8Array);
+    } catch (pdfJsError) {
+      const pdfJsDetails = getErrorDetails(pdfJsError);
 
-      console.error("[pdf] pdf2json extraction failed", {
+      console.error("[pdf] pdfjs-dist extraction failed", {
         fileName: options.fileName ?? null,
         arrayBufferByteLength: arrayBuffer.byteLength,
         uint8ArrayLength: uint8Array.length,
-        errorName: details.name,
-        errorMessage: details.message,
-        errorStack: details.stack,
+        errorName: pdfJsDetails.name,
+        errorMessage: pdfJsDetails.message,
+        errorStack: pdfJsDetails.stack,
       });
 
-      throw error;
+      try {
+        text = await extractTextWithPdf2Json(arrayBuffer);
+      } catch (pdf2JsonError) {
+        const pdf2JsonDetails = getErrorDetails(pdf2JsonError);
+
+        console.error("[pdf] pdf2json extraction failed", {
+          fileName: options.fileName ?? null,
+          arrayBufferByteLength: arrayBuffer.byteLength,
+          uint8ArrayLength: uint8Array.length,
+          errorName: pdf2JsonDetails.name,
+          errorMessage: pdf2JsonDetails.message,
+          errorStack: pdf2JsonDetails.stack,
+        });
+
+        throw pdf2JsonError;
+      }
     }
 
     if (!text.trim()) {
