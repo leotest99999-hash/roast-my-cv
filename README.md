@@ -7,6 +7,7 @@ RoastMyCV is a Next.js app that lets people upload a PDF resume, get a brutally 
 - Next.js 16 App Router
 - Tailwind CSS 4
 - Groq Chat Completions API
+- Clerk for optional authentication
 - Stripe Checkout
 - Vercel Blob for durable premium-session storage
 - Vercel-ready deployment
@@ -35,6 +36,8 @@ Copy `.env.example` to `.env.local` and set:
 
 - `GROQ_API_KEY`
 - `GROQ_MODEL` (optional, defaults to `llama-3.3-70b-versatile`)
+- `CLERK_SECRET_KEY`
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - `BLOB_READ_WRITE_TOKEN`
@@ -50,6 +53,7 @@ Copy `.env.example` to `.env.local` and set:
 5. A Stripe webhook on `/api/stripe/webhook` marks successful Checkout Sessions as paid.
 6. After Stripe redirects back, `/api/checkout/verify` confirms the paid session and restores any persisted premium data.
 7. `/api/rewrite` verifies the paid session matches the stored roast snapshot, then generates or returns the saved premium output.
+8. Optional Clerk auth adds sign-in/sign-up routes and a header login button without blocking the roast flow.
 
 ## Notes
 
@@ -57,6 +61,7 @@ Copy `.env.example` to `.env.local` and set:
 - Premium unlocks now persist server-side. Local development falls back to `.data/premium-unlocks` if `BLOB_READ_WRITE_TOKEN` is not set.
 - The upload is limited to PDFs under 5MB so the app stays fast and deployment-safe.
 - If `OWNER_PREVIEW_TOKEN` is set, you can unlock a private owner-only preview panel at `/owner-preview` and force unpaid or paid UI states on your own browser without changing the experience for anyone else.
+- Clerk auth is optional for users. The roast and payment flow still work without signing in.
 
 ## Verification
 

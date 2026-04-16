@@ -145,6 +145,68 @@ textarea {
   );
 }
 
+.motion-enter {
+  opacity: 0;
+  transform: translateY(24px) scale(0.985);
+  animation: rise-in 0.82s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: var(--motion-delay, 0ms);
+}
+
+.motion-delay-1 {
+  --motion-delay: 40ms;
+}
+
+.motion-delay-2 {
+  --motion-delay: 110ms;
+}
+
+.motion-delay-3 {
+  --motion-delay: 180ms;
+}
+
+.motion-delay-4 {
+  --motion-delay: 260ms;
+}
+
+.motion-delay-5 {
+  --motion-delay: 340ms;
+}
+
+.motion-delay-6 {
+  --motion-delay: 420ms;
+}
+
+.motion-delay-7 {
+  --motion-delay: 500ms;
+}
+
+.motion-delay-8 {
+  --motion-delay: 580ms;
+}
+
+.motion-float {
+  animation:
+    rise-in 0.82s cubic-bezier(0.16, 1, 0.3, 1) forwards,
+    float-gentle 8s ease-in-out infinite 1s;
+  animation-delay: var(--motion-delay, 0ms), calc(var(--motion-delay, 0ms) + 850ms);
+}
+
+.interactive-lift {
+  transition:
+    transform 220ms ease,
+    border-color 220ms ease,
+    background-color 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.interactive-lift:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
 @keyframes scan-drift {
   0%,
   100% {
@@ -155,5 +217,39 @@ textarea {
   50% {
     transform: translateY(240%);
     opacity: 1;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes float-gentle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-enter,
+  .motion-float,
+  .interactive-lift {
+    animation: none !important;
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 }

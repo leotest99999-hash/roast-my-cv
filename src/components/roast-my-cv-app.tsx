@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { AuthControls } from "@/components/auth-controls";
 import {
   isOwnerPreviewMode,
   ownerPreviewModeStorageKey,
@@ -1137,7 +1138,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
   return (
     <main className="relative overflow-hidden">
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-12 px-4 py-5 sm:gap-16 sm:px-6 sm:py-7 md:px-8 lg:px-10">
-        <header className="flex flex-col gap-5 rounded-[30px] border border-white/10 bg-white/4 px-4 py-4 backdrop-blur-xl sm:px-5 md:flex-row md:items-center md:justify-between md:rounded-full">
+        <header className="motion-enter motion-delay-1 flex flex-col gap-5 rounded-[30px] border border-white/10 bg-white/4 px-4 py-4 backdrop-blur-xl sm:px-5 md:flex-row md:items-center md:justify-between md:rounded-full">
           <div className="flex min-w-0 items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-full border border-coral/25 bg-coral/12 text-coral">
               <Flame className="h-5 w-5" />
@@ -1147,15 +1148,18 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
               <p className="text-lg font-semibold tracking-tight">RoastMyCV</p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2 text-sm text-muted sm:gap-3">
-            <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">PDF under 5MB</span>
-            <span className="rounded-full border border-coral/20 bg-coral/10 px-4 py-2 text-coral">$2.99 rewrite</span>
+          <div className="flex flex-col items-start gap-3 md:items-end">
+            <AuthControls />
+            <div className="flex flex-wrap gap-2 text-sm text-muted sm:gap-3">
+              <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">PDF under 5MB</span>
+              <span className="rounded-full border border-coral/20 bg-coral/10 px-4 py-2 text-coral">$2.99 rewrite</span>
+            </div>
           </div>
         </header>
 
         <section className="grid items-start gap-8 pt-2 sm:gap-10 sm:pt-4 lg:grid-cols-[1.08fr_0.92fr] lg:pt-10">
           <div className="space-y-8">
-            <div className="poster-shell rounded-[34px] px-5 py-6 sm:px-7 sm:py-8 lg:px-9 lg:py-10">
+            <div className="poster-shell motion-enter motion-delay-2 motion-float rounded-[34px] px-5 py-6 sm:px-7 sm:py-8 lg:px-9 lg:py-10">
               <div className="relative space-y-7">
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="eyebrow rounded-full border border-white/10 bg-white/6 px-3 py-2 text-[11px]">
@@ -1230,7 +1234,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
 
           <section
             id="upload-studio"
-            className="poster-shell rounded-[30px] p-5 sm:rounded-[34px] sm:p-6 md:p-8"
+            className="poster-shell motion-enter motion-delay-3 rounded-[30px] p-5 sm:rounded-[34px] sm:p-6 md:p-8"
           >
             <div className="scan-glow" />
             <div className="relative space-y-6">
@@ -1380,7 +1384,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
           </section>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-[0.34fr_0.66fr]">
+        <section className="motion-enter motion-delay-4 grid gap-6 lg:grid-cols-[0.34fr_0.66fr]">
           <div className="space-y-3">
             <p className="eyebrow">How it works</p>
             <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
@@ -1394,7 +1398,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
 
           <div className="grid gap-4 md:grid-cols-3">
             {howItWorksSteps.map((step) => (
-              <div key={step.number} className="poster-shell rounded-[28px] p-5">
+              <div key={step.number} className="poster-shell interactive-lift rounded-[28px] p-5">
                 <p className="font-mono text-sm tracking-[0.24em] text-coral">{step.number}</p>
                 <h3 className="mt-4 text-xl font-semibold tracking-tight">{step.title}</h3>
                 <p className="mt-3 text-sm leading-7 text-muted">{step.body}</p>
@@ -1403,7 +1407,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
           </div>
         </section>
 
-        <section id="proof-lab" className="space-y-8">
+        <section id="proof-lab" className="motion-enter motion-delay-5 space-y-8">
           <div className="space-y-3">
             <p className="eyebrow">Proof Of Output</p>
             <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
@@ -1417,7 +1421,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
 
           <div className="grid gap-4 xl:grid-cols-3">
             {proofExamples.map((example) => (
-              <article key={example.label} className="poster-shell rounded-[30px] p-5 sm:p-6">
+              <article key={example.label} className="poster-shell interactive-lift rounded-[30px] p-5 sm:p-6">
                 <p className="eyebrow text-[11px]">{example.label}</p>
                 <div className="mt-5 space-y-4">
                   <div className="rounded-[22px] border border-coral/18 bg-coral/8 p-4">
@@ -1438,7 +1442,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
           </div>
         </section>
 
-        <section className="space-y-8">
+        <section className="motion-enter motion-delay-6 space-y-8">
           <div className="space-y-3">
             <p className="eyebrow">Free analysis</p>
             <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
@@ -1553,7 +1557,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
           )}
         </section>
 
-        <section className="grid gap-5 lg:grid-cols-[0.34fr_0.66fr]">
+        <section className="motion-enter motion-delay-7 grid gap-5 lg:grid-cols-[0.34fr_0.66fr]">
           <div className="space-y-3">
             <p className="eyebrow">Before Vs After</p>
             <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
@@ -1599,7 +1603,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
           </div>
         </section>
 
-        <section id="premium-rewrite" className="space-y-8 pb-10">
+        <section id="premium-rewrite" className="motion-enter motion-delay-8 space-y-8 pb-10">
           <div className="space-y-3">
             <p className="eyebrow">Paid unlock</p>
             <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
