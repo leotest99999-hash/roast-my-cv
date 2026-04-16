@@ -498,6 +498,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
     options?: {
       resumeHash?: string | null;
       resumeText?: string | null;
+      forceRegenerate?: boolean;
     },
   ) {
     setIsRewriting(true);
@@ -509,6 +510,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
         sessionId: string;
         resumeHash?: string;
         resumeText?: string;
+        forceRegenerate?: boolean;
       } = {
         sessionId,
       };
@@ -522,6 +524,10 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
 
       if (resumeText) {
         body.resumeText = resumeText;
+      }
+
+      if (options?.forceRegenerate) {
+        body.forceRegenerate = true;
       }
 
       const response = await fetch("/api/rewrite", {
@@ -815,13 +821,24 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const marginX = 54;
-      const topMargin = 56;
+      const topMargin = 72;
       const bottomMargin = 54;
       const contentWidth = pageWidth - marginX * 2;
+      const accent = { r: 255, g: 118, b: 91 };
+      const accentSoft = { r: 255, g: 213, b: 194 };
+      const muted = { r: 102, g: 107, b: 115 };
       const markdownLines = visibleRewrite.polishedResume
         .replace(/\r\n/g, "\n")
         .split("\n");
       let cursorY = topMargin;
+
+      const drawPageChrome = () => {
+        pdf.setFillColor(accent.r, accent.g, accent.b);
+        pdf.rect(0, 0, pageWidth, 18, "F");
+        pdf.setDrawColor(accentSoft.r, accentSoft.g, accentSoft.b);
+        pdf.setLineWidth(1);
+        pdf.line(marginX, 40, pageWidth - marginX, 40);
+      };
 
       const ensureSpace = (blockHeight: number) => {
         if (cursorY + blockHeight <= pageHeight - bottomMargin) {
@@ -830,7 +847,17 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
 
         pdf.addPage();
         cursorY = topMargin;
+        drawPageChrome();
       };
+
+      const isLikelyContactLine = (line: string) =>
+        line.includes("@") ||
+        line.includes("|") ||
+        line.toLowerCase().includes("linkedin") ||
+        line.toLowerCase().includes("portfolio") ||
+        line.toLowerCase().includes("github") ||
+        /https?:\/\//i.test(line) ||
+        /\+?\d[\d\s().-]{6,}/.test(line);
 
       const writeWrappedText = ({
         text,
@@ -860,11 +887,15 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
         cursorY += blockHeight + after;
       };
 
+      drawPageChrome();
       pdf.setProperties({
         title: visibleRewrite.title,
         subject: "RoastMyCV polished resume",
       });
       pdf.setTextColor(18, 20, 24);
+
+      let wroteName = false;
+      let canRenderContactLine = false;
 
       for (const rawLine of markdownLines) {
         const line = rawLine.trim();
@@ -875,30 +906,51 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
         }
 
         if (line.startsWith("# ")) {
+          wroteName = true;
+          canRenderContactLine = true;
           writeWrappedText({
             text: line.slice(2).trim(),
-            fontSize: 22,
-            lineHeight: 24,
-            after: 18,
+            fontSize: 28,
+            lineHeight: 30,
+            after: 14,
             style: "bold",
           });
           continue;
         }
 
+        if (wroteName && canRenderContactLine && isLikelyContactLine(line)) {
+          pdf.setTextColor(muted.r, muted.g, muted.b);
+          writeWrappedText({
+            text: line,
+            fontSize: 10,
+            lineHeight: 13,
+            after: 16,
+          });
+          pdf.setTextColor(18, 20, 24);
+          canRenderContactLine = false;
+          continue;
+        }
+
         if (line.startsWith("## ")) {
-          cursorY += 4;
+          cursorY += 6;
+          ensureSpace(18);
+          pdf.setFillColor(accent.r, accent.g, accent.b);
+          pdf.roundedRect(marginX, cursorY + 2, 6, 12, 2, 2, "F");
+          pdf.setTextColor(18, 20, 24);
           writeWrappedText({
             text: line.slice(3).trim().toUpperCase(),
             fontSize: 11,
             lineHeight: 14,
-            after: 8,
+            after: 10,
             style: "bold",
+            x: marginX + 16,
+            width: contentWidth - 16,
           });
           continue;
         }
 
         if (line.startsWith("- ")) {
-          const bulletIndent = 16;
+          const bulletIndent = 18;
           const bulletText = line.slice(2).trim();
 
           pdf.setFont("helvetica", "normal");
@@ -911,7 +963,9 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
           const blockHeight = bulletLines.length * 16;
 
           ensureSpace(blockHeight);
-          pdf.text("-", marginX, cursorY, { baseline: "top" });
+          pdf.setFillColor(accent.r, accent.g, accent.b);
+          pdf.roundedRect(marginX, cursorY + 6, 6, 6, 1.5, 1.5, "F");
+          pdf.setTextColor(18, 20, 24);
           pdf.text(bulletLines, marginX + bulletIndent, cursorY, {
             baseline: "top",
           });
@@ -919,6 +973,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
           continue;
         }
 
+        canRenderContactLine = false;
         writeWrappedText({
           text: line,
           fontSize: 11,
@@ -1565,7 +1620,9 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                     disabled={!analysis || isBusy}
                     onClick={() => {
                       if (paidSessionId) {
-                        void requestRewrite(paidSessionId);
+                        void requestRewrite(paidSessionId, {
+                          forceRegenerate: true,
+                        });
                         return;
                       }
 

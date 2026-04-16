@@ -6,6 +6,7 @@ import {
   getPremiumSessionRecord,
   markPremiumSessionPaid,
   savePremiumArtifacts,
+  type PremiumSessionRecord,
 } from "@/lib/premium-sessions";
 import {
   coverLetterSystemPrompt,
@@ -19,12 +20,47 @@ import { getStripeClient } from "@/lib/stripe";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+function buildRewriteAnalysisContext(
+  analysis: PremiumSessionRecord["analysis"],
+) {
+  if (!analysis) {
+    return "";
+  }
+
+  const wins = analysis.wins.length
+    ? analysis.wins.map((win) => `- ${win}`).join("\n")
+    : "- None captured.";
+  const issues = analysis.issues.length
+    ? analysis.issues
+        .map(
+          (issue) =>
+            `- ${issue.category}: ${issue.diagnosis} Fix direction: ${issue.fix}`,
+        )
+        .join("\n")
+    : "- None captured.";
+
+  return `
+Roast analysis to fix in the rewrite:
+- Resume score: ${analysis.score}/100
+- ATS score: ${analysis.atsScore}/100
+- ATS verdict: ${analysis.atsVerdict}
+- Core lead: ${analysis.lead}
+
+Strengths to preserve:
+${wins}
+
+Problems to actively improve:
+${issues}
+`.trim();
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
       sessionId?: string;
       resumeText?: string;
       resumeHash?: string;
+      forceRegenerate?: boolean;
     };
 
     if (!body.sessionId) {
@@ -100,7 +136,7 @@ export async function POST(request: Request) {
     }
 
     if (product === "cover_letter") {
-      if (storedRecord?.coverLetter) {
+      if (storedRecord?.coverLetter && !body.forceRegenerate) {
         return Response.json({
           coverLetter: storedRecord.coverLetter,
         });
@@ -138,14 +174,20 @@ export async function POST(request: Request) {
       });
     }
 
-    if (storedRecord?.rewrite) {
+    if (storedRecord?.rewrite && !body.forceRegenerate) {
       return Response.json(storedRecord.rewrite);
     }
+
+    const rewriteAnalysisContext = buildRewriteAnalysisContext(
+      storedRecord?.analysis ?? null,
+    );
 
     const groqResult = await createStructuredGroqCompletion({
       schema: rewriteResultSchema,
       systemPrompt: rewriteSystemPrompt,
-      userPrompt: `${createRewriteUserPrompt()}\n\nResume snapshot:\n\n${normalizedResume}`,
+      userPrompt: `${createRewriteUserPrompt()}${
+        rewriteAnalysisContext ? `\n\n${rewriteAnalysisContext}` : ""
+      }\n\nResume snapshot:\n\n${normalizedResume}`,
     });
 
     const rewrite = {
