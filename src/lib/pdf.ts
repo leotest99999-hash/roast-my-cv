@@ -36,6 +36,22 @@ type ExtractPdfTextOptions = {
   fileName?: string | null;
 };
 
+function getErrorDetails(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+    };
+  }
+
+  return {
+    message: typeof error === "string" ? error : "Unknown error",
+    stack: undefined,
+    name: typeof error,
+  };
+}
+
 export async function extractPdfText(
   pdfBuffer: Buffer,
   options: ExtractPdfTextOptions = {},
@@ -56,9 +72,56 @@ export async function extractPdfText(
 
   try {
     const { extractText } = await import("unpdf");
-    const result = await extractText(new Uint8Array(pdfBuffer), {
-      mergePages: true,
-    });
+    const attemptExtraction = async (
+      input: Buffer | Uint8Array,
+      attempt: 1 | 2,
+      description: string,
+    ) => {
+      try {
+        return await extractText(input, {
+          mergePages: true,
+        });
+      } catch (error) {
+        const details = getErrorDetails(error);
+
+        console.error(`[pdf] unpdf extraction attempt ${attempt} failed`, {
+          attempt,
+          description,
+          fileName: options.fileName ?? null,
+          bufferLength: input.length,
+          errorName: details.name,
+          errorMessage: details.message,
+          errorStack: details.stack,
+        });
+
+        throw error;
+      }
+    };
+
+    let result: Awaited<ReturnType<typeof extractText>>;
+
+    try {
+      result = await attemptExtraction(pdfBuffer, 1, "buffer");
+    } catch (firstError) {
+      const retryBuffer = Uint8Array.from(pdfBuffer);
+
+      console.error("[pdf] retrying unpdf extraction with plain Uint8Array", {
+        fileName: options.fileName ?? null,
+        originalBufferLength: pdfBuffer.length,
+        retryBufferLength: retryBuffer.length,
+      });
+
+      try {
+        result = await attemptExtraction(
+          retryBuffer,
+          2,
+          "plain-uint8array-retry",
+        );
+      } catch {
+        throw firstError;
+      }
+    }
+
     const text = typeof result?.text === "string" ? result.text : "";
 
     if (!text.trim()) {
