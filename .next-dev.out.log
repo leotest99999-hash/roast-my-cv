@@ -38,3 +38,9 @@
  GET / 200 in 458ms (next.js: 305ms, application-code: 153ms)
 ✓ Compiled in 162ms
  GET / 200 in 516ms (next.js: 360ms, application-code: 156ms)
+▲ Next.js 16.2.3 (Turbopack)
+- Local:         http://127.0.0.1:3001
+- Network:       http://127.0.0.1:3001
+✓ Ready in 1411ms
+
+ GET / 200 in 2.3s (next.js: 1416ms, application-code: 896ms)
