@@ -10,7 +10,7 @@ export class PdfExtractionError extends Error {
   }
 }
 
-export function hasPdfSignature(pdfInput: ArrayBuffer | Uint8Array) {
+export function findPdfSignatureOffset(pdfInput: ArrayBuffer | Uint8Array) {
   const pdfBytes =
     pdfInput instanceof Uint8Array ? pdfInput : new Uint8Array(pdfInput);
   const headerWindow = pdfBytes.subarray(
@@ -20,7 +20,7 @@ export function hasPdfSignature(pdfInput: ArrayBuffer | Uint8Array) {
   const maxOffset = headerWindow.length - pdfHeader.length;
 
   if (maxOffset < 0) {
-    return false;
+    return -1;
   }
 
   for (let offset = 0; offset <= maxOffset; offset += 1) {
@@ -29,11 +29,15 @@ export function hasPdfSignature(pdfInput: ArrayBuffer | Uint8Array) {
     );
 
     if (isHeaderMatch) {
-      return true;
+      return offset;
     }
   }
 
-  return false;
+  return -1;
+}
+
+export function hasPdfSignature(pdfInput: ArrayBuffer | Uint8Array) {
+  return findPdfSignatureOffset(pdfInput) >= 0;
 }
 
 type ExtractPdfTextOptions = {
@@ -166,9 +170,16 @@ export async function extractPdfText(
   arrayBuffer: ArrayBuffer,
   options: ExtractPdfTextOptions = {},
 ) {
-  const uint8Array = new Uint8Array(arrayBuffer.slice(0));
+  const rawBytes = new Uint8Array(arrayBuffer);
+  const headerOffset = findPdfSignatureOffset(rawBytes);
+  const normalizedBytes =
+    headerOffset >= 0
+      ? rawBytes.slice(headerOffset)
+      : Uint8Array.from(rawBytes);
+  const pdfJsBytes = Uint8Array.from(normalizedBytes);
+  const fallbackArrayBuffer = normalizedBytes.buffer.slice(0);
 
-  if (!uint8Array.length) {
+  if (!normalizedBytes.length) {
     throw new PdfExtractionError(
       "That upload looks empty. Please export the PDF again and retry.",
     );
@@ -176,7 +187,7 @@ export async function extractPdfText(
 
   const fileNameLooksLikePdf = options.fileName?.toLowerCase().endsWith(".pdf");
 
-  if (!hasPdfSignature(uint8Array) && !fileNameLooksLikePdf) {
+  if (headerOffset < 0 && !fileNameLooksLikePdf) {
     throw new PdfExtractionError(
       "That file doesn't look like a valid PDF. Please upload a PDF resume and try again.",
     );
@@ -186,28 +197,30 @@ export async function extractPdfText(
     let text = "";
 
     try {
-      text = await extractTextWithPdfJsDist(uint8Array);
+      text = await extractTextWithPdfJsDist(pdfJsBytes);
     } catch (pdfJsError) {
       const pdfJsDetails = getErrorDetails(pdfJsError);
 
       console.error("[pdf] pdfjs-dist extraction failed", {
         fileName: options.fileName ?? null,
         arrayBufferByteLength: arrayBuffer.byteLength,
-        uint8ArrayLength: uint8Array.length,
+        uint8ArrayLength: normalizedBytes.length,
+        headerOffset,
         errorName: pdfJsDetails.name,
         errorMessage: pdfJsDetails.message,
         errorStack: pdfJsDetails.stack,
       });
 
       try {
-        text = await extractTextWithPdf2Json(arrayBuffer);
+        text = await extractTextWithPdf2Json(fallbackArrayBuffer);
       } catch (pdf2JsonError) {
         const pdf2JsonDetails = getErrorDetails(pdf2JsonError);
 
         console.error("[pdf] pdf2json extraction failed", {
           fileName: options.fileName ?? null,
           arrayBufferByteLength: arrayBuffer.byteLength,
-          uint8ArrayLength: uint8Array.length,
+          uint8ArrayLength: normalizedBytes.length,
+          headerOffset,
           errorName: pdf2JsonDetails.name,
           errorMessage: pdf2JsonDetails.message,
           errorStack: pdf2JsonDetails.stack,
