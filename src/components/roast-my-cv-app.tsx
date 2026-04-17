@@ -10,6 +10,7 @@ import {
   Download,
   FileUp,
   Flame,
+  History,
   LoaderCircle,
   RotateCcw,
   Share2,
@@ -17,6 +18,7 @@ import {
   Sparkles,
   TriangleAlert,
 } from "lucide-react";
+import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { AuthControls } from "@/components/auth-controls";
@@ -39,6 +41,8 @@ import type {
 type RoastMyCvAppProps = {
   initialSessionId: string | null;
 };
+
+type HomeTab = "main" | "learn" | "account";
 
 type StoredSession = {
   analysis: RoastResult | null;
@@ -65,6 +69,27 @@ const heroTrustPoints = [
   "No signup",
   "PDF only",
   "Roast in under 30 seconds",
+] as const;
+const homeTabs: Array<{
+  value: HomeTab;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "main",
+    label: "Main",
+    description: "Upload, roast, and unlock the rewrite.",
+  },
+  {
+    value: "learn",
+    label: "How it works",
+    description: "See the flow, proof, and before-vs-after.",
+  },
+  {
+    value: "account",
+    label: "Account",
+    description: "History, sign-in, and saved roast perks.",
+  },
 ] as const;
 const howItWorksSteps = [
   {
@@ -201,6 +226,23 @@ function getFriendlyFrontendError() {
   return genericFrontendErrorMessage;
 }
 
+async function getFriendlyRoastError(response: Response) {
+  try {
+    const payload = (await response.json()) as {
+      error?: string;
+      retryAfterSeconds?: number;
+    };
+
+    if (typeof payload.error === "string" && payload.error.trim().length > 0) {
+      return payload.error;
+    }
+  } catch {
+    // Fall back to the generic message below.
+  }
+
+  return getFriendlyFrontendError();
+}
+
 function getAtsScoreClassName(atsScore: number) {
   if (atsScore < 50) {
     return "text-coral";
@@ -271,7 +313,9 @@ function IssueRow({ issue }: { issue: RoastIssue }) {
 }
 
 export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
+  const { isSignedIn } = useAuth();
   const [hydrated, setHydrated] = useState(false);
+  const [activeTab, setActiveTab] = useState<HomeTab>("main");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [resumeName, setResumeName] = useState<string | null>(null);
   const [email, setEmail] = useState("");
@@ -741,7 +785,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
       });
 
       if (!response.ok) {
-        throw new Error(getFriendlyFrontendError());
+        throw new Error(await getFriendlyRoastError(response));
       }
 
       const payload = (await response.json()) as RoastResult;
@@ -749,8 +793,12 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
       setAnalysis(payload);
       setResumeName(selectedFile.name);
       setStatusMessage("Roast complete. If it stings in the right places, the rewrite button is live.");
-    } catch {
-      setError(getFriendlyFrontendError());
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error && caughtError.message
+          ? caughtError.message
+          : getFriendlyFrontendError(),
+      );
     } finally {
       setIsRoasting(false);
     }
@@ -1134,6 +1182,9 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
   const liveAfterPreview = formatPreviewLine(
     visibleRewrite ? pickPreviewLine(visibleRewrite.polishedResume) : null,
   );
+  const showMainTab = activeTab === "main";
+  const showLearnTab = activeTab === "learn";
+  const showAccountTab = activeTab === "account";
 
   return (
     <main className="relative overflow-hidden">
@@ -1157,6 +1208,36 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
           </div>
         </header>
 
+        <section className="motion-enter motion-delay-2">
+          <div className="poster-shell rounded-[28px] p-3 sm:rounded-[30px] sm:p-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              {homeTabs.map((tab) => {
+                const isActive = activeTab === tab.value;
+
+                return (
+                  <button
+                    key={tab.value}
+                    type="button"
+                    className={`rounded-[22px] border px-4 py-4 text-left transition ${
+                      isActive
+                        ? "border-lime/22 bg-lime/10"
+                        : "border-white/10 bg-white/4 hover:border-white/18 hover:bg-white/7"
+                    }`}
+                    onClick={() => setActiveTab(tab.value)}
+                  >
+                    <p className="text-sm font-semibold text-foreground">{tab.label}</p>
+                    <p className="mt-2 text-sm leading-7 text-muted">
+                      {tab.description}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {showMainTab && (
+          <>
         <section className="grid items-start gap-8 pt-2 sm:gap-10 sm:pt-4 lg:grid-cols-[1.08fr_0.92fr] lg:pt-10">
           <div className="space-y-8">
             <div className="poster-shell motion-enter motion-delay-2 motion-float rounded-[34px] px-5 py-6 sm:px-7 sm:py-8 lg:px-9 lg:py-10">
@@ -1187,12 +1268,13 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                     Drop a PDF now
                     <ArrowRight className="h-4 w-4" />
                   </a>
-                  <a
-                    href="#proof-lab"
+                  <button
+                    type="button"
                     className="text-sm font-semibold text-muted transition hover:text-foreground"
+                    onClick={() => setActiveTab("learn")}
                   >
                     See what gets fixed
-                  </a>
+                  </button>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
@@ -1384,64 +1466,6 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
           </section>
         </section>
 
-        <section className="motion-enter motion-delay-4 grid gap-6 lg:grid-cols-[0.34fr_0.66fr]">
-          <div className="space-y-3">
-            <p className="eyebrow">How it works</p>
-            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
-              One flow. Zero guesswork.
-            </h2>
-            <p className="max-w-lg text-base leading-8 text-muted">
-              A good landing page should answer the first questions fast: what this does,
-              what happens next, and why the paid version is worth it.
-            </p>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            {howItWorksSteps.map((step) => (
-              <div key={step.number} className="poster-shell interactive-lift rounded-[28px] p-5">
-                <p className="font-mono text-sm tracking-[0.24em] text-coral">{step.number}</p>
-                <h3 className="mt-4 text-xl font-semibold tracking-tight">{step.title}</h3>
-                <p className="mt-3 text-sm leading-7 text-muted">{step.body}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section id="proof-lab" className="motion-enter motion-delay-5 space-y-8">
-          <div className="space-y-3">
-            <p className="eyebrow">Proof Of Output</p>
-            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
-              What gets fixed, in plain sight.
-            </h2>
-            <p className="max-w-2xl text-base leading-8 text-muted">
-              Instead of vague “AI optimization,” the page now shows the exact kinds of
-              changes the paid rewrite is supposed to make.
-            </p>
-          </div>
-
-          <div className="grid gap-4 xl:grid-cols-3">
-            {proofExamples.map((example) => (
-              <article key={example.label} className="poster-shell interactive-lift rounded-[30px] p-5 sm:p-6">
-                <p className="eyebrow text-[11px]">{example.label}</p>
-                <div className="mt-5 space-y-4">
-                  <div className="rounded-[22px] border border-coral/18 bg-coral/8 p-4">
-                    <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-coral">
-                      Before
-                    </p>
-                    <p className="mt-3 text-sm leading-7 text-foreground/84">{example.before}</p>
-                  </div>
-                  <div className="rounded-[22px] border border-lime/18 bg-lime/8 p-4">
-                    <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-lime">
-                      After
-                    </p>
-                    <p className="mt-3 text-sm leading-7 text-foreground/92">{example.after}</p>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-
         <section className="motion-enter motion-delay-6 space-y-8">
           <div className="space-y-3">
             <p className="eyebrow">Free analysis</p>
@@ -1555,52 +1579,6 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
               </div>
             </div>
           )}
-        </section>
-
-        <section className="motion-enter motion-delay-7 grid gap-5 lg:grid-cols-[0.34fr_0.66fr]">
-          <div className="space-y-3">
-            <p className="eyebrow">Before Vs After</p>
-            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
-              The paid glow-up should feel obvious.
-            </h2>
-            <p className="max-w-lg text-base leading-8 text-muted">
-              People convert faster when they can see the shape of the upgrade. This block
-              shows the “before” energy against the “after” version the app is aiming for.
-            </p>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="poster-shell rounded-[30px] p-5 sm:p-6">
-              <p className="eyebrow text-[11px]">Before</p>
-              <p className="mt-4 text-xl font-semibold tracking-tight text-coral">
-                Reads like effort, not impact.
-              </p>
-              <div className="mt-5 rounded-[22px] border border-coral/18 bg-coral/8 p-4">
-                <p className="font-mono text-[13px] leading-7 text-foreground/84">
-                  {liveBeforePreview ?? proofExamples[0].before}
-                </p>
-              </div>
-              <p className="mt-4 text-sm leading-7 text-muted">
-                Too generic, too soft, and not nearly specific enough to survive a skim.
-              </p>
-            </div>
-
-            <div className="poster-shell rounded-[30px] p-5 sm:p-6">
-              <p className="eyebrow text-[11px]">After</p>
-              <p className="mt-4 text-xl font-semibold tracking-tight text-lime">
-                Sounds sharper, cleaner, and more hireable.
-              </p>
-              <div className="mt-5 rounded-[22px] border border-lime/18 bg-lime/8 p-4">
-                <p className="font-mono text-[13px] leading-7 text-foreground/92">
-                  {liveAfterPreview ?? proofExamples[0].after}
-                </p>
-              </div>
-              <p className="mt-4 text-sm leading-7 text-muted">
-                Better verbs, clearer positioning, and enough structure to help both ATS and
-                recruiters keep reading.
-              </p>
-            </div>
-          </div>
         </section>
 
         <section id="premium-rewrite" className="motion-enter motion-delay-8 space-y-8 pb-10">
@@ -1958,6 +1936,247 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
             </div>
           </div>
         </section>
+          </>
+        )}
+
+        {showLearnTab && (
+          <>
+        <section className="motion-enter motion-delay-4 grid gap-6 lg:grid-cols-[0.34fr_0.66fr]">
+          <div className="space-y-3">
+            <p className="eyebrow">How it works</p>
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
+              One flow. Zero guesswork.
+            </h2>
+            <p className="max-w-lg text-base leading-8 text-muted">
+              A good landing page should answer the first questions fast: what this does,
+              what happens next, and why the paid version is worth it.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            {howItWorksSteps.map((step) => (
+              <div key={step.number} className="poster-shell interactive-lift rounded-[28px] p-5">
+                <p className="font-mono text-sm tracking-[0.24em] text-coral">{step.number}</p>
+                <h3 className="mt-4 text-xl font-semibold tracking-tight">{step.title}</h3>
+                <p className="mt-3 text-sm leading-7 text-muted">{step.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section id="proof-lab" className="motion-enter motion-delay-5 space-y-8">
+          <div className="space-y-3">
+            <p className="eyebrow">Proof Of Output</p>
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
+              What gets fixed, in plain sight.
+            </h2>
+            <p className="max-w-2xl text-base leading-8 text-muted">
+              Instead of vague “AI optimization,” the page now shows the exact kinds of
+              changes the paid rewrite is supposed to make.
+            </p>
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-3">
+            {proofExamples.map((example) => (
+              <article key={example.label} className="poster-shell interactive-lift rounded-[30px] p-5 sm:p-6">
+                <p className="eyebrow text-[11px]">{example.label}</p>
+                <div className="mt-5 space-y-4">
+                  <div className="rounded-[22px] border border-coral/18 bg-coral/8 p-4">
+                    <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-coral">
+                      Before
+                    </p>
+                    <p className="mt-3 text-sm leading-7 text-foreground/84">{example.before}</p>
+                  </div>
+                  <div className="rounded-[22px] border border-lime/18 bg-lime/8 p-4">
+                    <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-lime">
+                      After
+                    </p>
+                    <p className="mt-3 text-sm leading-7 text-foreground/92">{example.after}</p>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="motion-enter motion-delay-7 grid gap-5 lg:grid-cols-[0.34fr_0.66fr]">
+          <div className="space-y-3">
+            <p className="eyebrow">Before Vs After</p>
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
+              The paid glow-up should feel obvious.
+            </h2>
+            <p className="max-w-lg text-base leading-8 text-muted">
+              People convert faster when they can see the shape of the upgrade. This block
+              shows the “before” energy against the “after” version the app is aiming for.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="poster-shell rounded-[30px] p-5 sm:p-6">
+              <p className="eyebrow text-[11px]">Before</p>
+              <p className="mt-4 text-xl font-semibold tracking-tight text-coral">
+                Reads like effort, not impact.
+              </p>
+              <div className="mt-5 rounded-[22px] border border-coral/18 bg-coral/8 p-4">
+                <p className="font-mono text-[13px] leading-7 text-foreground/84">
+                  {liveBeforePreview ?? proofExamples[0].before}
+                </p>
+              </div>
+              <p className="mt-4 text-sm leading-7 text-muted">
+                Too generic, too soft, and not nearly specific enough to survive a skim.
+              </p>
+            </div>
+
+            <div className="poster-shell rounded-[30px] p-5 sm:p-6">
+              <p className="eyebrow text-[11px]">After</p>
+              <p className="mt-4 text-xl font-semibold tracking-tight text-lime">
+                Sounds sharper, cleaner, and more hireable.
+              </p>
+              <div className="mt-5 rounded-[22px] border border-lime/18 bg-lime/8 p-4">
+                <p className="font-mono text-[13px] leading-7 text-foreground/92">
+                  {liveAfterPreview ?? proofExamples[0].after}
+                </p>
+              </div>
+              <p className="mt-4 text-sm leading-7 text-muted">
+                Better verbs, clearer positioning, and enough structure to help both ATS and
+                recruiters keep reading.
+              </p>
+            </div>
+          </div>
+        </section>
+
+          </>
+        )}
+
+        {showAccountTab && (
+          <section className="grid gap-5 lg:grid-cols-[0.42fr_0.58fr]">
+            <div className="poster-shell motion-enter motion-delay-4 rounded-[30px] p-6 sm:rounded-[34px] sm:p-8">
+              <div className="space-y-5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full border border-lime/18 bg-lime/10 text-lime">
+                    <History className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="eyebrow text-[11px]">Account</p>
+                    <p className="text-lg font-semibold tracking-tight">
+                      {isSignedIn
+                        ? "Your roast history lives here."
+                        : "Optional sign-in, real perks."}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
+                    {isSignedIn
+                      ? "Keep every roast, rewrite, and comeback plan in one place."
+                      : "You can use RoastMyCV without an account, but signing in makes it stick."}
+                  </h2>
+                  <p className="text-base leading-8 text-muted">
+                    {isSignedIn
+                      ? "Signed-in roasts are saved to your history, paid unlocks can be restored more reliably, and the one-hour free-roast cooldown follows your account instead of only this browser."
+                      : "The free roast still works without login. An account just gives you saved history, easier recovery across devices, and a cleaner way to keep your progress tied to you."}
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                  {isSignedIn ? (
+                    <Link href="/history" className={primaryButtonClass}>
+                      <History className="h-4 w-4" />
+                      Open history
+                    </Link>
+                  ) : (
+                    <Link href="/sign-up" className={primaryButtonClass}>
+                      <Sparkles className="h-4 w-4" />
+                      Create account
+                    </Link>
+                  )}
+                  {isSignedIn ? (
+                    <button
+                      type="button"
+                      className={secondaryButtonClass}
+                      onClick={() => setActiveTab("main")}
+                    >
+                      <ArrowRight className="h-4 w-4" />
+                      Back to main
+                    </button>
+                  ) : (
+                    <Link href="/sign-in" className={secondaryButtonClass}>
+                      <Shield className="h-4 w-4" />
+                      Log in
+                    </Link>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-5">
+              <div className="poster-shell motion-enter motion-delay-5 rounded-[30px] p-5 sm:rounded-[34px] sm:p-7">
+                <p className="eyebrow">What this unlocks</p>
+                <div className="mt-5 grid gap-3">
+                  {[
+                    isSignedIn
+                      ? "Every signed-in roast is saved to your private history page so you can revisit older feedback."
+                      : "Sign in if you want each roast saved to a private history page instead of living only in browser storage.",
+                    "Paid rewrites and cover letters can be restored more reliably if you come back later or switch devices.",
+                    "Free roasts are limited to one per hour per account or guest browser to protect the app and model spend.",
+                  ].map((item) => (
+                    <div
+                      key={item}
+                      className="rounded-[20px] border border-white/10 bg-white/4 p-4 text-sm leading-7 text-muted-strong"
+                    >
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="poster-shell motion-enter motion-delay-6 rounded-[30px] p-5 sm:rounded-[34px] sm:p-7">
+                <p className="eyebrow">{isSignedIn ? "History next" : "Why sign in later"}</p>
+                <h3 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">
+                  {isSignedIn
+                    ? "Review past roasts without digging through old tabs."
+                    : "Keep the first experience fast, then add history when it helps."}
+                </h3>
+                <p className="mt-4 text-base leading-8 text-muted">
+                  {isSignedIn
+                    ? "Your History page shows the timestamp, score, ATS score, lead line, and expandable details for every saved roast."
+                    : "The account is optional on purpose. You can still test the product first, then sign in when you want saved feedback and easier recovery."}
+                </p>
+
+                <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                  {isSignedIn ? (
+                    <>
+                      <Link href="/history" className={secondaryButtonClass}>
+                        <History className="h-4 w-4" />
+                        View roast history
+                      </Link>
+                      <button
+                        type="button"
+                        className={secondaryButtonClass}
+                        onClick={() => setActiveTab("main")}
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        Roast another resume
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <Link href="/sign-up" className={primaryButtonClass}>
+                        <Sparkles className="h-4 w-4" />
+                        Create account
+                      </Link>
+                      <Link href="/sign-in" className={secondaryButtonClass}>
+                        <Shield className="h-4 w-4" />
+                        Log in
+                      </Link>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
         {ownerPreviewEnabled && (
           <div className="fixed bottom-4 right-4 z-40 w-[min(22rem,calc(100vw-2rem))]">

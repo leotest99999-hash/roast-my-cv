@@ -34,23 +34,33 @@ function buildRewriteAnalysisContext(
     ? analysis.issues
         .map(
           (issue) =>
-            `- ${issue.category}: ${issue.diagnosis} Fix direction: ${issue.fix}`,
+            `- ${issue.category}: ${issue.roast} Diagnosis: ${issue.diagnosis} Fix direction: ${issue.fix}`,
         )
         .join("\n")
+    : "- None captured.";
+  const upgradePoints = analysis.upgradePitch.points.length
+    ? analysis.upgradePitch.points.map((point) => `- ${point}`).join("\n")
     : "- None captured.";
 
   return `
 Roast analysis to fix in the rewrite:
 - Resume score: ${analysis.score}/100
+- Score label: ${analysis.scoreLabel}
 - ATS score: ${analysis.atsScore}/100
 - ATS verdict: ${analysis.atsVerdict}
 - Core lead: ${analysis.lead}
+- Roast summary: ${analysis.summary}
 
 Strengths to preserve:
 ${wins}
 
 Problems to actively improve:
 ${issues}
+
+Upgrade promises to fulfill:
+- ${analysis.upgradePitch.eyebrow}
+- ${analysis.upgradePitch.headline}
+${upgradePoints}
 `.trim();
 }
 

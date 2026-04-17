@@ -3,6 +3,11 @@ import { createStructuredGroqCompletion } from "@/lib/groq";
 import { createRoastUserPrompt, roastSystemPrompt } from "@/lib/prompts";
 import { normalizeResumeText, sha256 } from "@/lib/hash";
 import { extractPdfText, hasPdfSignature, PdfExtractionError } from "@/lib/pdf";
+import {
+  getRoastCooldownKey,
+  getRoastCooldownStatus,
+  touchRoastCooldown,
+} from "@/lib/roast-cooldown";
 import { saveRoastHistory } from "@/lib/roast-history";
 import { roastAnalysisSchema } from "@/lib/schemas";
 import { auth } from "@clerk/nextjs/server";
@@ -14,6 +19,39 @@ const maxPdfSize = 5 * 1024 * 1024;
 
 export async function POST(request: Request) {
   try {
+    const { userId } = await auth();
+    const forwardedFor = request.headers.get("x-forwarded-for");
+    const ipAddress =
+      forwardedFor?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      request.headers.get("cf-connecting-ip");
+    const cooldownKey = getRoastCooldownKey({
+      userId,
+      ipAddress,
+      userAgent: request.headers.get("user-agent"),
+    });
+
+    try {
+      const cooldownStatus = await getRoastCooldownStatus(cooldownKey);
+
+      if (cooldownStatus.active && cooldownStatus.message) {
+        return Response.json(
+          {
+            error: cooldownStatus.message,
+            retryAfterSeconds: cooldownStatus.retryAfterSeconds,
+          },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(cooldownStatus.retryAfterSeconds),
+            },
+          },
+        );
+      }
+    } catch (cooldownError) {
+      logApiError("roast:cooldown-read", cooldownError);
+    }
+
     const formData = await request.formData();
     const resume = formData.get("resume");
 
@@ -84,14 +122,18 @@ export async function POST(request: Request) {
       resumeHash: sha256(normalizedResume),
     };
 
-    const { userId } = await auth();
-
     if (userId) {
       try {
         await saveRoastHistory(userId, payload);
       } catch (historyError) {
         logApiError("roast:history-save", historyError);
       }
+    }
+
+    try {
+      await touchRoastCooldown(cooldownKey);
+    } catch (cooldownError) {
+      logApiError("roast:cooldown-write", cooldownError);
     }
 
     return Response.json(payload);
