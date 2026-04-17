@@ -2,6 +2,7 @@ import type { Output, Text } from "pdf2json";
 
 const pdfHeader = [0x25, 0x50, 0x44, 0x46, 0x2d] as const;
 const pdfHeaderSearchWindow = 1024;
+const zipHeader = [0x50, 0x4b, 0x03, 0x04] as const;
 
 export class PdfExtractionError extends Error {
   constructor(message: string) {
@@ -43,6 +44,10 @@ export function hasPdfSignature(pdfInput: ArrayBuffer | Uint8Array) {
   return findPdfSignatureOffset(pdfInput) >= 0;
 }
 
+function hasZipSignature(documentBytes: Uint8Array) {
+  return zipHeader.every((byte, index) => documentBytes[index] === byte);
+}
+
 function getHexPreview(pdfBytes: Uint8Array, length = 24) {
   return Array.from(pdfBytes.subarray(0, Math.min(pdfBytes.length, length)))
     .map((byte) => byte.toString(16).padStart(2, "0"))
@@ -52,6 +57,23 @@ function getHexPreview(pdfBytes: Uint8Array, length = 24) {
 type ExtractPdfTextOptions = {
   fileName?: string | null;
 };
+
+type ZipExtractionResult =
+  | {
+      kind: "embedded-pdf";
+      entryNames: string[];
+      text: string;
+    }
+  | {
+      kind: "docx";
+      entryNames: string[];
+      text: string;
+    }
+  | {
+      kind: "unknown-zip";
+      entryNames: string[];
+      text: null;
+    };
 
 type GlobalWithPdfJsWorker = typeof globalThis & {
   pdfjsWorker?: {
@@ -123,6 +145,77 @@ function decodePdf2JsonText(encodedText: string) {
   }
 }
 
+function decodeXmlEntities(value: string) {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
+function extractTextFromDocxXml(xml: string) {
+  const withBreaks = xml
+    .replace(/<w:tab\/>/g, "\t")
+    .replace(/<\/w:p>/g, "\n")
+    .replace(/<\/w:tr>/g, "\n")
+    .replace(/<\/w:tc>/g, "\t")
+    .replace(/<w:br\/>/g, "\n");
+  const withoutTags = withBreaks.replace(/<[^>]+>/g, "");
+
+  return decodeXmlEntities(withoutTags)
+    .replace(/\r/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+async function extractTextFromZipArchive(
+  zipBytes: Uint8Array,
+): Promise<ZipExtractionResult> {
+  const { strFromU8, unzipSync } = await import("fflate");
+  const entries = unzipSync(zipBytes);
+  const entryNames = Object.keys(entries);
+  const pdfEntry = entryNames.find((entryName) =>
+    entryName.toLowerCase().endsWith(".pdf"),
+  );
+
+  if (pdfEntry) {
+    const embeddedPdf = entries[pdfEntry];
+    const embeddedBuffer = embeddedPdf.slice().buffer;
+
+    return {
+      kind: "embedded-pdf" as const,
+      entryNames,
+      text: await extractPdfText(embeddedBuffer, {
+        fileName: pdfEntry,
+      }),
+    };
+  }
+
+  const documentXmlEntry = entryNames.find(
+    (entryName) => entryName.toLowerCase() === "word/document.xml",
+  );
+
+  if (documentXmlEntry) {
+    const docxText = extractTextFromDocxXml(strFromU8(entries[documentXmlEntry]));
+
+    if (docxText) {
+      return {
+        kind: "docx" as const,
+        entryNames,
+        text: docxText,
+      };
+    }
+  }
+
+  return {
+    kind: "unknown-zip" as const,
+    entryNames,
+    text: null,
+  };
+}
+
 async function extractTextWithPdfJsDist(uint8Array: Uint8Array) {
   await ensurePdfJsNodePolyfills();
   await ensurePdfJsWorkerModule();
@@ -182,6 +275,7 @@ export async function extractPdfText(
   const rawBytes = new Uint8Array(arrayBuffer);
   const headerOffset = findPdfSignatureOffset(rawBytes);
   const headerOffsetAnywhere = findPdfSignatureOffset(rawBytes, rawBytes.length);
+  const zipWrappedUpload = headerOffset < 0 && hasZipSignature(rawBytes);
   const normalizedBytes =
     headerOffsetAnywhere >= 0
       ? rawBytes.slice(headerOffsetAnywhere)
@@ -200,6 +294,39 @@ export async function extractPdfText(
   if (headerOffset < 0 && !fileNameLooksLikePdf) {
     throw new PdfExtractionError(
       "That file doesn't look like a valid PDF. Please upload a PDF resume and try again.",
+    );
+  }
+
+  if (zipWrappedUpload) {
+    try {
+      const zipResult = await extractTextFromZipArchive(rawBytes);
+
+      if (zipResult.text) {
+        return zipResult.text;
+      }
+
+      console.error("[pdf] zip-wrapped upload did not contain a readable resume document", {
+        fileName: options.fileName ?? null,
+        arrayBufferByteLength: arrayBuffer.byteLength,
+        entryNames: zipResult.entryNames.slice(0, 20),
+        kind: zipResult.kind,
+        headHex: getHexPreview(rawBytes),
+      });
+    } catch (zipError) {
+      const zipDetails = getErrorDetails(zipError);
+
+      console.error("[pdf] zip archive inspection failed", {
+        fileName: options.fileName ?? null,
+        arrayBufferByteLength: arrayBuffer.byteLength,
+        headHex: getHexPreview(rawBytes),
+        errorName: zipDetails.name,
+        errorMessage: zipDetails.message,
+        errorStack: zipDetails.stack,
+      });
+    }
+
+    throw new PdfExtractionError(
+      "That upload looks like a ZIP or Office document, not a real PDF. Please export the resume as an actual PDF and try again.",
     );
   }
 
