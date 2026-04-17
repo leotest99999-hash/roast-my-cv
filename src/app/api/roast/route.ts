@@ -3,7 +3,9 @@ import { createStructuredGroqCompletion } from "@/lib/groq";
 import { createRoastUserPrompt, roastSystemPrompt } from "@/lib/prompts";
 import { normalizeResumeText, sha256 } from "@/lib/hash";
 import { extractPdfText, hasPdfSignature, PdfExtractionError } from "@/lib/pdf";
+import { saveRoastHistory } from "@/lib/roast-history";
 import { roastAnalysisSchema } from "@/lib/schemas";
+import { auth } from "@clerk/nextjs/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -76,11 +78,23 @@ export async function POST(request: Request) {
       groqResult.normalizedResume,
     );
 
-    return Response.json({
+    const payload = {
       ...groqResult,
       normalizedResume,
       resumeHash: sha256(normalizedResume),
-    });
+    };
+
+    const { userId } = await auth();
+
+    if (userId) {
+      try {
+        await saveRoastHistory(userId, payload);
+      } catch (historyError) {
+        logApiError("roast:history-save", historyError);
+      }
+    }
+
+    return Response.json(payload);
   } catch (error) {
     logApiError("roast", error);
     return jsonApiError();
