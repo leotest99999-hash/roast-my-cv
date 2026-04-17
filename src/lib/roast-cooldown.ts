@@ -17,6 +17,7 @@ const freeRoastWindowMs = freeRoastWindowHours * 60 * 60 * 1000;
 const roastCooldownRecordSchema = z.object({
   key: z.string().min(1),
   roastTimestamps: z.array(z.string().min(1)).default([]),
+  cooldownStartedAt: z.string().nullable().default(null),
   updatedAt: z.string().min(1),
 });
 
@@ -58,6 +59,16 @@ function formatDuration(ms: number) {
   }
 
   return `${hours} hour${hours === 1 ? "" : "s"} ${minutes} minute${minutes === 1 ? "" : "s"}`;
+}
+
+function getCooldownEndMs(cooldownStartedAt: string) {
+  const startMs = new Date(cooldownStartedAt).getTime();
+
+  if (!Number.isFinite(startMs)) {
+    return null;
+  }
+
+  return startMs + freeRoastWindowMs;
 }
 
 async function readRoastCooldownText(key: string) {
@@ -115,12 +126,18 @@ async function writeRoastCooldownRecord(record: RoastCooldownRecord) {
 }
 
 function getWindowedTimestamps(record: RoastCooldownRecord) {
-  const windowStart = Date.now() - freeRoastWindowMs;
-
   return record.roastTimestamps.filter((timestamp) => {
     const parsed = new Date(timestamp).getTime();
-    return Number.isFinite(parsed) && parsed >= windowStart;
+    return Number.isFinite(parsed);
   });
+}
+
+function getLegacyCooldownStart(timestamps: string[]) {
+  if (timestamps.length < freeRoastLimit) {
+    return null;
+  }
+
+  return timestamps[timestamps.length - 1] ?? null;
 }
 
 export function getRoastCooldownKey(identity: RoastCooldownIdentity) {
@@ -175,40 +192,44 @@ export async function getRoastCooldownStatus(
   try {
     const record = roastCooldownRecordSchema.parse(JSON.parse(stored));
     const activeTimestamps = getWindowedTimestamps(record);
-    const remainingRoasts = Math.max(0, freeRoastLimit - activeTimestamps.length);
+    const cooldownStartedAt =
+      record.cooldownStartedAt ?? getLegacyCooldownStart(activeTimestamps);
 
-    if (remainingRoasts > 0) {
-      return {
-        active: false,
-        remainingMs: 0,
-        retryAfterSeconds: 0,
-        message: null,
-        limitReached: false,
-        remainingRoasts,
-        limit: freeRoastLimit,
-        windowHours: freeRoastWindowHours,
-        resetAt: activeTimestamps[0] ?? null,
-      };
+    if (cooldownStartedAt) {
+      const cooldownEndMs = getCooldownEndMs(cooldownStartedAt);
+
+      if (cooldownEndMs && cooldownEndMs > Date.now()) {
+        const remainingMs = Math.max(0, cooldownEndMs - Date.now());
+
+        return {
+          active: true,
+          remainingMs,
+          retryAfterSeconds: Math.max(1, Math.ceil(remainingMs / 1000)),
+          message: `You used all ${freeRoastLimit} free roasts. The ${freeRoastWindowHours}-hour reset starts after that third roast, and yours unlocks again in ${formatDuration(remainingMs)}. Go Pro if you want unlimited uploads.`,
+          limitReached: true,
+          remainingRoasts: 0,
+          limit: freeRoastLimit,
+          windowHours: freeRoastWindowHours,
+          resetAt: new Date(cooldownEndMs).toISOString(),
+        };
+      }
     }
 
-    const oldestTimestamp = activeTimestamps[0];
-    const oldestMs = oldestTimestamp
-      ? new Date(oldestTimestamp).getTime()
-      : Date.now();
-    const remainingMs = Math.max(0, oldestMs + freeRoastWindowMs - Date.now());
+    const remainingRoasts = Math.max(
+      0,
+      freeRoastLimit - Math.min(activeTimestamps.length, freeRoastLimit),
+    );
 
     return {
-      active: true,
-      remainingMs,
-      retryAfterSeconds: Math.max(1, Math.ceil(remainingMs / 1000)),
-      message: `You used all ${freeRoastLimit} free roasts for this ${freeRoastWindowHours}-hour window. Try again in ${formatDuration(remainingMs)} or go Pro for unlimited uploads.`,
-      limitReached: true,
-      remainingRoasts: 0,
+      active: false,
+      remainingMs: 0,
+      retryAfterSeconds: 0,
+      message: null,
+      limitReached: false,
+      remainingRoasts,
       limit: freeRoastLimit,
       windowHours: freeRoastWindowHours,
-      resetAt: oldestTimestamp
-        ? new Date(oldestMs + freeRoastWindowMs).toISOString()
-        : null,
+      resetAt: null,
     };
   } catch (error) {
     console.error("[roast-cooldown] invalid stored payload", {
@@ -230,6 +251,36 @@ export async function getRoastCooldownStatus(
   }
 }
 
+function getWritableState(current: RoastCooldownRecord | null) {
+  if (!current) {
+    return {
+      roastTimestamps: [] as string[],
+      cooldownStartedAt: null as string | null,
+    };
+  }
+
+  const activeTimestamps = getWindowedTimestamps(current);
+  const cooldownStartedAt =
+    current.cooldownStartedAt ?? getLegacyCooldownStart(activeTimestamps);
+
+  if (cooldownStartedAt) {
+    const cooldownEndMs = getCooldownEndMs(cooldownStartedAt);
+
+    if (cooldownEndMs && cooldownEndMs > Date.now()) {
+      return {
+        roastTimestamps: [] as string[],
+        cooldownStartedAt,
+      };
+    }
+  }
+
+  return {
+    roastTimestamps:
+      activeTimestamps.length >= freeRoastLimit ? [] : activeTimestamps,
+    cooldownStartedAt: null as string | null,
+  };
+}
+
 export async function touchRoastCooldown(
   key: string,
   options?: {
@@ -242,12 +293,11 @@ export async function touchRoastCooldown(
 
   const now = new Date().toISOString();
   const current = await readRoastCooldownText(key);
-  let timestamps: string[] = [];
+  let currentRecord: RoastCooldownRecord | null = null;
 
   if (current) {
     try {
-      const record = roastCooldownRecordSchema.parse(JSON.parse(current));
-      timestamps = getWindowedTimestamps(record);
+      currentRecord = roastCooldownRecordSchema.parse(JSON.parse(current));
     } catch (error) {
       console.error("[roast-cooldown] invalid payload during touch", {
         error,
@@ -256,11 +306,26 @@ export async function touchRoastCooldown(
     }
   }
 
-  await writeRoastCooldownRecord({
+  const writableState = getWritableState(currentRecord);
+
+  if (writableState.cooldownStartedAt) {
+    const activeStatus = await getRoastCooldownStatus(key, options);
+
+    if (activeStatus.active) {
+      return activeStatus;
+    }
+  }
+
+  const nextTimestamps = [...writableState.roastTimestamps, now];
+  const nextRecord: RoastCooldownRecord = {
     key,
-    roastTimestamps: [...timestamps, now],
+    roastTimestamps: nextTimestamps.length >= freeRoastLimit ? [] : nextTimestamps,
+    cooldownStartedAt:
+      nextTimestamps.length >= freeRoastLimit ? now : null,
     updatedAt: now,
-  });
+  };
+
+  await writeRoastCooldownRecord(nextRecord);
 
   return getRoastCooldownStatus(key, options);
 }
