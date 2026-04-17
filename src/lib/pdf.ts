@@ -10,12 +10,15 @@ export class PdfExtractionError extends Error {
   }
 }
 
-export function findPdfSignatureOffset(pdfInput: ArrayBuffer | Uint8Array) {
+export function findPdfSignatureOffset(
+  pdfInput: ArrayBuffer | Uint8Array,
+  searchWindow: number = pdfHeaderSearchWindow,
+) {
   const pdfBytes =
     pdfInput instanceof Uint8Array ? pdfInput : new Uint8Array(pdfInput);
   const headerWindow = pdfBytes.subarray(
     0,
-    Math.min(pdfBytes.length, pdfHeaderSearchWindow),
+    Math.min(pdfBytes.length, searchWindow),
   );
   const maxOffset = headerWindow.length - pdfHeader.length;
 
@@ -38,6 +41,12 @@ export function findPdfSignatureOffset(pdfInput: ArrayBuffer | Uint8Array) {
 
 export function hasPdfSignature(pdfInput: ArrayBuffer | Uint8Array) {
   return findPdfSignatureOffset(pdfInput) >= 0;
+}
+
+function getHexPreview(pdfBytes: Uint8Array, length = 24) {
+  return Array.from(pdfBytes.subarray(0, Math.min(pdfBytes.length, length)))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join(" ");
 }
 
 type ExtractPdfTextOptions = {
@@ -172,9 +181,10 @@ export async function extractPdfText(
 ) {
   const rawBytes = new Uint8Array(arrayBuffer);
   const headerOffset = findPdfSignatureOffset(rawBytes);
+  const headerOffsetAnywhere = findPdfSignatureOffset(rawBytes, rawBytes.length);
   const normalizedBytes =
-    headerOffset >= 0
-      ? rawBytes.slice(headerOffset)
+    headerOffsetAnywhere >= 0
+      ? rawBytes.slice(headerOffsetAnywhere)
       : Uint8Array.from(rawBytes);
   const pdfJsBytes = Uint8Array.from(normalizedBytes);
   const fallbackArrayBuffer = normalizedBytes.buffer.slice(0);
@@ -206,6 +216,8 @@ export async function extractPdfText(
         arrayBufferByteLength: arrayBuffer.byteLength,
         uint8ArrayLength: normalizedBytes.length,
         headerOffset,
+        headerOffsetAnywhere,
+        headHex: getHexPreview(normalizedBytes),
         errorName: pdfJsDetails.name,
         errorMessage: pdfJsDetails.message,
         errorStack: pdfJsDetails.stack,
@@ -221,6 +233,8 @@ export async function extractPdfText(
           arrayBufferByteLength: arrayBuffer.byteLength,
           uint8ArrayLength: normalizedBytes.length,
           headerOffset,
+          headerOffsetAnywhere,
+          headHex: getHexPreview(normalizedBytes),
           errorName: pdf2JsonDetails.name,
           errorMessage: pdf2JsonDetails.message,
           errorStack: pdf2JsonDetails.stack,
