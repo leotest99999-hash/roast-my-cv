@@ -19,7 +19,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "RoastMyCV",
   description:
-    "Upload a PDF resume, get a brutally funny but useful roast for free, then unlock a polished rewrite for $2.99.",
+    "Upload a PDF resume, get a brutally funny but useful roast for free, then unlock unlimited roasts, rewrites, and cover letters with RoastMyCV Pro.",
 };
 
 export const viewport: Viewport = {

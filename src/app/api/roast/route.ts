@@ -8,6 +8,10 @@ import {
   getRoastCooldownStatus,
   touchRoastCooldown,
 } from "@/lib/roast-cooldown";
+import {
+  getProSubscriptionRecord,
+  isProSubscriptionActive,
+} from "@/lib/pro-subscriptions";
 import { saveRoastHistory } from "@/lib/roast-history";
 import { roastAnalysisSchema } from "@/lib/schemas";
 import { auth } from "@clerk/nextjs/server";
@@ -25,6 +29,10 @@ export async function POST(request: Request) {
       forwardedFor?.split(",")[0]?.trim() ||
       request.headers.get("x-real-ip") ||
       request.headers.get("cf-connecting-ip");
+    const proRecord = userId
+      ? await getProSubscriptionRecord(userId)
+      : null;
+    const isProActive = isProSubscriptionActive(proRecord);
     const cooldownKey = getRoastCooldownKey({
       userId,
       ipAddress,
@@ -32,13 +40,20 @@ export async function POST(request: Request) {
     });
 
     try {
-      const cooldownStatus = await getRoastCooldownStatus(cooldownKey);
+      const cooldownStatus = await getRoastCooldownStatus(cooldownKey, {
+        isPro: isProActive,
+      });
 
       if (cooldownStatus.active && cooldownStatus.message) {
         return Response.json(
           {
             error: cooldownStatus.message,
             retryAfterSeconds: cooldownStatus.retryAfterSeconds,
+            limitReached: cooldownStatus.limitReached,
+            remainingRoasts: cooldownStatus.remainingRoasts,
+            resetAt: cooldownStatus.resetAt,
+            windowHours: cooldownStatus.windowHours,
+            limit: cooldownStatus.limit,
           },
           {
             status: 429,
@@ -131,7 +146,9 @@ export async function POST(request: Request) {
     }
 
     try {
-      await touchRoastCooldown(cooldownKey);
+      await touchRoastCooldown(cooldownKey, {
+        isPro: isProActive,
+      });
     } catch (cooldownError) {
       logApiError("roast:cooldown-write", cooldownError);
     }

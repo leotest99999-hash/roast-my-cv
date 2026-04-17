@@ -5,6 +5,7 @@ import {
   getPremiumSessionRecord,
   markPremiumSessionPaid,
 } from "@/lib/premium-sessions";
+import { saveProSubscriptionFromStripe } from "@/lib/pro-subscriptions";
 import { getStripeClient } from "@/lib/stripe";
 
 export const runtime = "nodejs";
@@ -12,6 +13,9 @@ export const runtime = "nodejs";
 const handledCheckoutEvents = new Set([
   "checkout.session.completed",
   "checkout.session.async_payment_succeeded",
+  "customer.subscription.created",
+  "customer.subscription.updated",
+  "customer.subscription.deleted",
 ]);
 
 export async function POST(request: Request) {
@@ -48,6 +52,35 @@ export async function POST(request: Request) {
     return Response.json({ received: true });
   }
 
+  if (
+    event.type === "customer.subscription.created" ||
+    event.type === "customer.subscription.updated" ||
+    event.type === "customer.subscription.deleted"
+  ) {
+    const subscription = event.data.object as Stripe.Subscription;
+    const clerkUserId = subscription.metadata?.clerkUserId;
+
+    if (!clerkUserId) {
+      return Response.json({ received: true });
+    }
+
+    try {
+      await saveProSubscriptionFromStripe({
+        userId: clerkUserId,
+        subscription,
+        customerId:
+          typeof subscription.customer === "string"
+            ? subscription.customer
+            : subscription.customer?.id ?? null,
+      });
+    } catch (error) {
+      logApiError("stripe:webhook:subscription", error);
+      return new Response("Failed to persist subscription.", { status: 500 });
+    }
+
+    return Response.json({ received: true });
+  }
+
   const session = event.data.object;
 
   if (!(session && "id" in session && typeof session.id === "string")) {
@@ -62,6 +95,34 @@ export async function POST(request: Request) {
       checkoutSession,
       storedRecord,
     );
+
+    if (metadataDetails.product === "pro_subscription") {
+      const subscriptionId =
+        typeof checkoutSession.subscription === "string"
+          ? checkoutSession.subscription
+          : checkoutSession.subscription?.id;
+      const clerkUserId = checkoutSession.metadata?.clerkUserId ?? null;
+
+      if (!subscriptionId || !clerkUserId) {
+        return Response.json({ received: true });
+      }
+
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      await saveProSubscriptionFromStripe({
+        userId: clerkUserId,
+        subscription,
+        customerId:
+          typeof checkoutSession.customer === "string"
+            ? checkoutSession.customer
+            : checkoutSession.customer?.id ?? null,
+        email:
+          checkoutSession.customer_details?.email ||
+          checkoutSession.customer_email ||
+          null,
+      });
+
+      return Response.json({ received: true });
+    }
 
     if (!metadataDetails.product || !metadataDetails.resumeHash) {
       return Response.json({ received: true });

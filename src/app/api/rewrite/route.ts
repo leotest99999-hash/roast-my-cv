@@ -9,13 +9,22 @@ import {
   type PremiumSessionRecord,
 } from "@/lib/premium-sessions";
 import {
+  getProSubscriptionRecord,
+  isProSubscriptionActive,
+} from "@/lib/pro-subscriptions";
+import {
   coverLetterSystemPrompt,
   createCoverLetterUserPrompt,
   createRewriteUserPrompt,
   rewriteSystemPrompt,
 } from "@/lib/prompts";
-import { coverLetterResultSchema, rewriteResultSchema } from "@/lib/schemas";
+import {
+  coverLetterResultSchema,
+  rewriteResultSchema,
+  type RoastResult,
+} from "@/lib/schemas";
 import { getStripeClient } from "@/lib/stripe";
+import { auth } from "@clerk/nextjs/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -64,20 +73,97 @@ ${upgradePoints}
 `.trim();
 }
 
+async function generateProRewrite(params: {
+  normalizedResume: string;
+  analysis: RoastResult | null;
+  forceRegenerate?: boolean;
+}) {
+  const rewriteAnalysisContext = buildRewriteAnalysisContext(params.analysis);
+  const groqResult = await createStructuredGroqCompletion({
+    schema: rewriteResultSchema,
+    systemPrompt: rewriteSystemPrompt,
+    userPrompt: `${createRewriteUserPrompt()}${
+      rewriteAnalysisContext ? `\n\n${rewriteAnalysisContext}` : ""
+    }\n\nResume snapshot:\n\n${params.normalizedResume}`,
+  });
+
+  return {
+    ...groqResult,
+    polishedResume: normalizeResumeText(groqResult.polishedResume),
+  };
+}
+
+async function generateProCoverLetter(normalizedResume: string) {
+  const groqResult = await createStructuredGroqCompletion({
+    schema: coverLetterResultSchema,
+    systemPrompt: coverLetterSystemPrompt,
+    userPrompt: `${createCoverLetterUserPrompt()}\n\nResume snapshot:\n\n${normalizedResume}`,
+  });
+
+  return normalizeResumeText(groqResult.coverLetter);
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
       sessionId?: string;
       resumeText?: string;
       resumeHash?: string;
+      feature?: "rewrite" | "cover_letter";
       forceRegenerate?: boolean;
+      analysis?: RoastResult | null;
     };
 
     if (!body.sessionId) {
-      return jsonApiError(
-        "We couldn't find the paid rewrite details. Please roast your resume again and retry.",
-        400,
-      );
+      const { userId } = await auth();
+
+      if (!userId) {
+        return jsonApiError(
+          "Go Pro with an account to unlock unlimited rewrites and cover letters.",
+          401,
+        );
+      }
+
+      const proRecord = await getProSubscriptionRecord(userId);
+
+      if (!isProSubscriptionActive(proRecord)) {
+        return jsonApiError(
+          "Go Pro to unlock unlimited rewrites and cover letters.",
+          403,
+        );
+      }
+
+      const normalizedResume = normalizeResumeText(body.resumeText ?? "");
+      const computedHash = sha256(normalizedResume);
+
+      if (!normalizedResume) {
+        return jsonApiError(
+          "Roast a resume first so the Pro tools have something to work with.",
+          400,
+        );
+      }
+
+      if (body.resumeHash && body.resumeHash !== computedHash) {
+        return jsonApiError(
+          "Your resume changed after the roast. Run the roast again before using the Pro tools.",
+          400,
+        );
+      }
+
+      if (body.feature === "cover_letter") {
+        const coverLetter = await generateProCoverLetter(normalizedResume);
+        return Response.json({
+          coverLetter,
+        });
+      }
+
+      const rewrite = await generateProRewrite({
+        normalizedResume,
+        analysis: body.analysis ?? null,
+        forceRegenerate: body.forceRegenerate,
+      });
+
+      return Response.json(rewrite);
     }
 
     const stripe = getStripeClient();
@@ -152,13 +238,7 @@ export async function POST(request: Request) {
         });
       }
 
-      const groqResult = await createStructuredGroqCompletion({
-        schema: coverLetterResultSchema,
-        systemPrompt: coverLetterSystemPrompt,
-        userPrompt: `${createCoverLetterUserPrompt()}\n\nResume snapshot:\n\n${normalizedResume}`,
-      });
-
-      const coverLetter = normalizeResumeText(groqResult.coverLetter);
+      const coverLetter = await generateProCoverLetter(normalizedResume);
 
       try {
         await savePremiumArtifacts({
@@ -188,22 +268,11 @@ export async function POST(request: Request) {
       return Response.json(storedRecord.rewrite);
     }
 
-    const rewriteAnalysisContext = buildRewriteAnalysisContext(
-      storedRecord?.analysis ?? null,
-    );
-
-    const groqResult = await createStructuredGroqCompletion({
-      schema: rewriteResultSchema,
-      systemPrompt: rewriteSystemPrompt,
-      userPrompt: `${createRewriteUserPrompt()}${
-        rewriteAnalysisContext ? `\n\n${rewriteAnalysisContext}` : ""
-      }\n\nResume snapshot:\n\n${normalizedResume}`,
+    const rewrite = await generateProRewrite({
+      normalizedResume,
+      analysis: storedRecord?.analysis ?? null,
+      forceRegenerate: body.forceRegenerate,
     });
-
-    const rewrite = {
-      ...groqResult,
-      polishedResume: normalizeResumeText(groqResult.polishedResume),
-    };
 
     try {
       await savePremiumArtifacts({

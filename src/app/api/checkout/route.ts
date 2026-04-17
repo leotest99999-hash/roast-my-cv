@@ -2,13 +2,16 @@ import { jsonApiError, logApiError } from "@/lib/api-errors";
 import { normalizeResumeText, sha256 } from "@/lib/hash";
 import { persistCheckoutDraft } from "@/lib/premium-sessions";
 import { resolvePremiumProduct } from "@/lib/premium-session-types";
+import { getProSubscriptionRecord, isProSubscriptionActive } from "@/lib/pro-subscriptions";
 import type { RoastResult, RewriteResult } from "@/lib/schemas";
 import { getStripeClient } from "@/lib/stripe";
+import { auth } from "@clerk/nextjs/server";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
+    const { userId } = await auth();
     const body = (await request.json()) as {
       resumeText?: string;
       resumeHash?: string;
@@ -18,6 +21,79 @@ export async function POST(request: Request) {
       analysis?: RoastResult | null;
       rewrite?: RewriteResult | null;
     };
+    const product = resolvePremiumProduct(body.product) ?? "polished_rewrite";
+    const stripe = getStripeClient();
+    const origin =
+      process.env.NEXT_PUBLIC_APP_URL || request.headers.get("origin") || new URL(request.url).origin;
+
+    if (product === "pro_subscription") {
+      if (!userId) {
+        return jsonApiError(
+          "Create a free account first so your Pro plan stays attached to you.",
+          401,
+        );
+      }
+
+      const existingRecord = await getProSubscriptionRecord(userId);
+      if (isProSubscriptionActive(existingRecord)) {
+        return jsonApiError(
+          "Your Pro plan is already active. Open billing if you need to manage it.",
+          409,
+        );
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        mode: "subscription",
+        billing_address_collection: "auto",
+        success_url: `${origin}/?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/`,
+        client_reference_id: userId,
+        ...(existingRecord?.customerId
+          ? {
+              customer: existingRecord.customerId,
+            }
+          : {}),
+        line_items: [
+          {
+            quantity: 1,
+            price_data: {
+              currency: "usd",
+              unit_amount: 1000,
+              recurring: {
+                interval: "month",
+              },
+              product_data: {
+                name: "RoastMyCV Pro",
+                description:
+                  "Unlimited roasts, unlimited rewrites, and unlimited cover letters.",
+              },
+            },
+          },
+        ],
+        metadata: {
+          app: "RoastMyCV",
+          product,
+          clerkUserId: userId,
+        },
+        subscription_data: {
+          metadata: {
+            app: "RoastMyCV",
+            product,
+            clerkUserId: userId,
+          },
+        },
+      });
+
+      if (!session.url) {
+        logApiError(
+          "checkout:missing-url",
+          new Error("Stripe created a pro subscription session without a checkout URL."),
+        );
+        return jsonApiError();
+      }
+
+      return Response.json({ url: session.url });
+    }
 
     const normalizedResume = normalizeResumeText(body.resumeText ?? "");
     const computedHash = sha256(normalizedResume);
@@ -36,10 +112,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const stripe = getStripeClient();
-    const origin =
-      process.env.NEXT_PUBLIC_APP_URL || request.headers.get("origin") || new URL(request.url).origin;
-    const product = resolvePremiumProduct(body.product) ?? "polished_rewrite";
     const priceConfig =
       product === "cover_letter"
         ? {

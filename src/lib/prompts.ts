@@ -68,10 +68,10 @@ Return structured JSON with:
 - atsVerdict: one short punchy sentence about the ATS result
 - lead: one punchy roast line that sounds memorable
 - summary: one tight paragraph mixing humor and practical clarity
-- standoutLine: one short line to sell the paid rewrite
+- standoutLine: one short line to sell the Pro plan
 - wins: 2 to 4 things the resume already does well
 - issues: 4 to 6 issues with category, severity, roast, diagnosis, and fix
-- upgradePitch: eyebrow, headline, and 3 to 4 bullets describing what the premium rewrite will improve
+- upgradePitch: eyebrow, headline, and 3 to 4 bullets describing what the Pro rewrite and cover-letter toolkit will improve
 - normalizedResume: a clean, faithful plain-text transcription of the resume content with sensible section breaks
 
 Output requirements:

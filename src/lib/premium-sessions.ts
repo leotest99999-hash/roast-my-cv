@@ -44,9 +44,14 @@ export const premiumSessionRecordSchema = z.object({
 
 export type PremiumSessionRecord = z.infer<typeof premiumSessionRecordSchema>;
 
+type LegacyPremiumProduct = Extract<
+  PremiumProduct,
+  "polished_rewrite" | "cover_letter"
+>;
+
 type CheckoutDraftInput = {
   sessionId: string;
-  product: PremiumProduct;
+  product: LegacyPremiumProduct;
   resumeHash: string;
   resumeName?: string | null;
   rewriteSessionId?: string | null;
@@ -57,7 +62,7 @@ type CheckoutDraftInput = {
 
 type PaidSessionUpdateInput = {
   sessionId: string;
-  product: PremiumProduct;
+  product: LegacyPremiumProduct;
   resumeHash: string;
   resumeName?: string | null;
   rewriteSessionId?: string | null;

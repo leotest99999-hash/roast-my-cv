@@ -10,11 +10,13 @@ const localRoastCooldownRoot = join(
   ".data",
   "roast-cooldowns",
 );
-const oneHourMs = 60 * 60 * 1000;
+export const freeRoastLimit = 3;
+export const freeRoastWindowHours = 5;
+const freeRoastWindowMs = freeRoastWindowHours * 60 * 60 * 1000;
 
 const roastCooldownRecordSchema = z.object({
   key: z.string().min(1),
-  lastRoastAt: z.string().min(1),
+  roastTimestamps: z.array(z.string().min(1)).default([]),
   updatedAt: z.string().min(1),
 });
 
@@ -112,6 +114,15 @@ async function writeRoastCooldownRecord(record: RoastCooldownRecord) {
   await writeFile(getLocalCooldownPath(record.key), content, "utf8");
 }
 
+function getWindowedTimestamps(record: RoastCooldownRecord) {
+  const windowStart = Date.now() - freeRoastWindowMs;
+
+  return record.roastTimestamps.filter((timestamp) => {
+    const parsed = new Date(timestamp).getTime();
+    return Number.isFinite(parsed) && parsed >= windowStart;
+  });
+}
+
 export function getRoastCooldownKey(identity: RoastCooldownIdentity) {
   if (identity.userId) {
     return `user-${identity.userId}`;
@@ -125,7 +136,26 @@ export function getRoastCooldownKey(identity: RoastCooldownIdentity) {
   return `guest-${sha256(fingerprintSource).slice(0, 24)}`;
 }
 
-export async function getRoastCooldownStatus(key: string) {
+export async function getRoastCooldownStatus(
+  key: string,
+  options?: {
+    isPro?: boolean;
+  },
+) {
+  if (options?.isPro) {
+    return {
+      active: false,
+      remainingMs: 0,
+      retryAfterSeconds: 0,
+      message: null,
+      limitReached: false,
+      remainingRoasts: null,
+      limit: freeRoastLimit,
+      windowHours: freeRoastWindowHours,
+      resetAt: null,
+    };
+  }
+
   const stored = await readRoastCooldownText(key);
 
   if (!stored) {
@@ -134,28 +164,51 @@ export async function getRoastCooldownStatus(key: string) {
       remainingMs: 0,
       retryAfterSeconds: 0,
       message: null,
+      limitReached: false,
+      remainingRoasts: freeRoastLimit,
+      limit: freeRoastLimit,
+      windowHours: freeRoastWindowHours,
+      resetAt: null,
     };
   }
 
   try {
     const record = roastCooldownRecordSchema.parse(JSON.parse(stored));
-    const elapsedMs = Date.now() - new Date(record.lastRoastAt).getTime();
-    const remainingMs = Math.max(0, oneHourMs - elapsedMs);
+    const activeTimestamps = getWindowedTimestamps(record);
+    const remainingRoasts = Math.max(0, freeRoastLimit - activeTimestamps.length);
 
-    if (remainingMs <= 0) {
+    if (remainingRoasts > 0) {
       return {
         active: false,
         remainingMs: 0,
         retryAfterSeconds: 0,
         message: null,
+        limitReached: false,
+        remainingRoasts,
+        limit: freeRoastLimit,
+        windowHours: freeRoastWindowHours,
+        resetAt: activeTimestamps[0] ?? null,
       };
     }
+
+    const oldestTimestamp = activeTimestamps[0];
+    const oldestMs = oldestTimestamp
+      ? new Date(oldestTimestamp).getTime()
+      : Date.now();
+    const remainingMs = Math.max(0, oldestMs + freeRoastWindowMs - Date.now());
 
     return {
       active: true,
       remainingMs,
       retryAfterSeconds: Math.max(1, Math.ceil(remainingMs / 1000)),
-      message: `You already got a free roast recently. Try again in ${formatDuration(remainingMs)}.`,
+      message: `You used all ${freeRoastLimit} free roasts for this ${freeRoastWindowHours}-hour window. Try again in ${formatDuration(remainingMs)} or go Pro for unlimited uploads.`,
+      limitReached: true,
+      remainingRoasts: 0,
+      limit: freeRoastLimit,
+      windowHours: freeRoastWindowHours,
+      resetAt: oldestTimestamp
+        ? new Date(oldestMs + freeRoastWindowMs).toISOString()
+        : null,
     };
   } catch (error) {
     console.error("[roast-cooldown] invalid stored payload", {
@@ -168,16 +221,46 @@ export async function getRoastCooldownStatus(key: string) {
       remainingMs: 0,
       retryAfterSeconds: 0,
       message: null,
+      limitReached: false,
+      remainingRoasts: freeRoastLimit,
+      limit: freeRoastLimit,
+      windowHours: freeRoastWindowHours,
+      resetAt: null,
     };
   }
 }
 
-export async function touchRoastCooldown(key: string) {
+export async function touchRoastCooldown(
+  key: string,
+  options?: {
+    isPro?: boolean;
+  },
+) {
+  if (options?.isPro) {
+    return getRoastCooldownStatus(key, options);
+  }
+
   const now = new Date().toISOString();
+  const current = await readRoastCooldownText(key);
+  let timestamps: string[] = [];
+
+  if (current) {
+    try {
+      const record = roastCooldownRecordSchema.parse(JSON.parse(current));
+      timestamps = getWindowedTimestamps(record);
+    } catch (error) {
+      console.error("[roast-cooldown] invalid payload during touch", {
+        error,
+        key,
+      });
+    }
+  }
 
   await writeRoastCooldownRecord({
     key,
-    lastRoastAt: now,
+    roastTimestamps: [...timestamps, now],
     updatedAt: now,
   });
+
+  return getRoastCooldownStatus(key, options);
 }

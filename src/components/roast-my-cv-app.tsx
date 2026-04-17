@@ -53,6 +53,26 @@ type StoredSession = {
   resumeName: string | null;
 };
 
+type ProStatus = {
+  signedIn: boolean;
+  isProActive: boolean;
+  subscriptionStatus: string | null;
+  cancelAtPeriodEnd: boolean;
+  currentPeriodEnd: string | null;
+  freeLimit: number;
+  windowHours: number;
+  remainingRoasts: number | null;
+  resetAt: string | null;
+  portalAvailable: boolean;
+};
+
+type RoastLimitPopupState = {
+  message: string;
+  resetAt: string | null;
+  windowHours: number;
+  limit: number;
+};
+
 const storageKey = "roastmycv-session-v1";
 const emailStorageKey = "roastmycv-email";
 const ownerPreviewPanelStorageKey = "roastmycv-owner-preview-panel-open";
@@ -104,8 +124,8 @@ const howItWorksSteps = [
   },
   {
     number: "03",
-    title: "Unlock the glow-up",
-    body: "Pay once and get a tighter rewrite plus a matching cover letter if you want it.",
+    title: "Upgrade to Pro if it helps",
+    body: "Pro removes the roast cap and unlocks unlimited rewrites plus matching cover letters.",
   },
 ] as const;
 const proofExamples = [
@@ -150,24 +170,24 @@ const ownerPreviewOptions: Array<{
   },
   {
     mode: "unpaid",
-    label: "Unpaid",
-    description: "Hide premium unlocks so you can review the paywall flow.",
+    label: "Free",
+    description: "Hide Pro access so you can review the free-tier paywall flow.",
   },
   {
     mode: "rewrite_paid",
     label: "Rewrite",
-    description: "Preview the rewrite-unlocked state without charging anything.",
+    description: "Preview the Pro rewrite state without changing the real account.",
   },
   {
     mode: "full_paid",
-    label: "Full premium",
-    description: "Preview rewrite plus cover letter as if everything was purchased.",
+    label: "Full Pro",
+    description: "Preview unlimited rewrite plus cover letter as if Pro were active.",
   },
 ];
 const ownerPreviewRewriteSample: RewriteResult = {
   title: "Sharper, ATS-ready rewrite",
   positioning:
-    "This preview version shows the kind of cleaner positioning, stronger verbs, and tighter structure the paid unlock is meant to reveal.",
+    "This preview version shows the kind of cleaner positioning, stronger verbs, and tighter structure the Pro tools are meant to reveal.",
   improvements: [
     "Lead with role-defining strengths instead of generic personality traits.",
     "Turn soft responsibility bullets into outcome-driven statements.",
@@ -226,23 +246,6 @@ function getFriendlyFrontendError() {
   return genericFrontendErrorMessage;
 }
 
-async function getFriendlyRoastError(response: Response) {
-  try {
-    const payload = (await response.json()) as {
-      error?: string;
-      retryAfterSeconds?: number;
-    };
-
-    if (typeof payload.error === "string" && payload.error.trim().length > 0) {
-      return payload.error;
-    }
-  } catch {
-    // Fall back to the generic message below.
-  }
-
-  return getFriendlyFrontendError();
-}
-
 function getAtsScoreClassName(atsScore: number) {
   if (atsScore < 50) {
     return "text-coral";
@@ -253,6 +256,22 @@ function getAtsScoreClassName(atsScore: number) {
   }
 
   return "text-lime";
+}
+
+function formatResetTime(resetAt: string | null) {
+  if (!resetAt) {
+    return null;
+  }
+
+  const parsed = new Date(resetAt);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function pickPreviewLine(text: string) {
@@ -329,6 +348,8 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
   const [coverLetter, setCoverLetter] = useState<string | null>(null);
   const [coverLetterSessionId, setCoverLetterSessionId] = useState<string | null>(null);
   const [paidSessionId, setPaidSessionId] = useState<string | null>(null);
+  const [proStatus, setProStatus] = useState<ProStatus | null>(null);
+  const [limitPopup, setLimitPopup] = useState<RoastLimitPopupState | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [didCopy, setDidCopy] = useState(false);
@@ -336,6 +357,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [isRoasting, setIsRoasting] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [isOpeningBillingPortal, setIsOpeningBillingPortal] = useState(false);
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
   const [isRewriting, setIsRewriting] = useState(false);
   const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
@@ -493,6 +515,31 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
     );
   }, [hydrated, ownerPreviewEnabled, isOwnerPreviewPanelOpen]);
 
+  async function refreshProStatus() {
+    try {
+      const response = await fetch("/api/pro/status", {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error("Pro status check failed.");
+      }
+
+      const payload = (await response.json()) as ProStatus;
+      setProStatus(payload);
+    } catch {
+      setProStatus(null);
+    }
+  }
+
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+
+    void refreshProStatus();
+  }, [hydrated, isSignedIn]);
+
   useEffect(() => {
     return () => {
       if (copyTimeoutRef.current) {
@@ -541,7 +588,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
   }, [isRoasting]);
 
   async function requestRewrite(
-    sessionId: string,
+    sessionId?: string | null,
     options?: {
       resumeHash?: string | null;
       resumeText?: string | null;
@@ -550,20 +597,30 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
   ) {
     setIsRewriting(true);
     setError(null);
-    setStatusMessage("Paid unlock verified. Rewriting the resume now...");
+    setStatusMessage(
+      sessionId
+        ? "Payment verified. Rewriting the resume now..."
+        : "Pro is active. Rewriting the resume now...",
+    );
 
     try {
       const body: {
-        sessionId: string;
+        sessionId?: string;
+        feature: "rewrite";
         resumeHash?: string;
         resumeText?: string;
         forceRegenerate?: boolean;
+        analysis?: RoastResult | null;
       } = {
-        sessionId,
+        feature: "rewrite",
       };
       const resumeHash = analysis?.resumeHash ?? options?.resumeHash ?? null;
       const resumeText =
         analysis?.normalizedResume ?? options?.resumeText ?? null;
+
+      if (sessionId) {
+        body.sessionId = sessionId;
+      }
 
       if (resumeHash) {
         body.resumeHash = resumeHash;
@@ -575,6 +632,10 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
 
       if (options?.forceRegenerate) {
         body.forceRegenerate = true;
+      }
+
+      if (analysis) {
+        body.analysis = analysis;
       }
 
       const response = await fetch("/api/rewrite", {
@@ -589,8 +650,10 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
 
       const payload = (await response.json()) as RewriteResult;
       setRewrite(payload);
-      setPaidSessionId(sessionId);
-      setStatusMessage("Polished rewrite ready. Copy it and tailor it before sending.");
+      if (sessionId) {
+        setPaidSessionId(sessionId);
+      }
+      setStatusMessage("Sharper rewrite ready. Copy it, tailor it, and send the stronger version.");
       window.setTimeout(() => {
         document
           .getElementById("premium-rewrite")
@@ -604,28 +667,40 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
   }
 
   async function requestCoverLetter(
-    sessionId: string,
+    sessionId?: string | null,
     options?: {
       resumeHash?: string | null;
       resumeText?: string | null;
     },
   ) {
     setIsGeneratingCoverLetter(true);
-    setCoverLetterSessionId(sessionId);
+    if (sessionId) {
+      setCoverLetterSessionId(sessionId);
+    }
     setError(null);
-    setStatusMessage("Payment confirmed. Drafting your matching cover letter now...");
+    setStatusMessage(
+      sessionId
+        ? "Payment confirmed. Drafting your matching cover letter now..."
+        : "Pro is active. Drafting your matching cover letter now...",
+    );
 
     try {
       const body: {
-        sessionId: string;
+        sessionId?: string;
+        feature: "cover_letter";
         resumeHash?: string;
         resumeText?: string;
+        analysis?: RoastResult | null;
       } = {
-        sessionId,
+        feature: "cover_letter",
       };
       const resumeHash = analysis?.resumeHash ?? options?.resumeHash ?? null;
       const resumeText =
         analysis?.normalizedResume ?? options?.resumeText ?? null;
+
+      if (sessionId) {
+        body.sessionId = sessionId;
+      }
 
       if (resumeHash) {
         body.resumeHash = resumeHash;
@@ -633,6 +708,10 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
 
       if (resumeText) {
         body.resumeText = resumeText;
+      }
+
+      if (analysis) {
+        body.analysis = analysis;
       }
 
       const response = await fetch("/api/rewrite", {
@@ -678,6 +757,19 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
         (await response.json()) as CheckoutVerificationResult;
       if (!verification.paid) {
         setStatusMessage("Stripe has the session, but payment is not complete yet.");
+        return;
+      }
+
+      if (verification.product === "pro_subscription") {
+        await refreshProStatus();
+
+        if (window.location.search.includes("session_id=")) {
+          window.history.replaceState({}, "", `${window.location.pathname}#premium-rewrite`);
+        }
+
+        setStatusMessage(
+          "Pro is live. Unlimited roasts, rewrites, and cover letters are unlocked.",
+        );
         return;
       }
 
@@ -785,28 +877,56 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
       });
 
       if (!response.ok) {
-        throw new Error(await getFriendlyRoastError(response));
+        const payload = (await response.json().catch(() => null)) as
+          | {
+              error?: string;
+              limitReached?: boolean;
+              resetAt?: string | null;
+              windowHours?: number;
+              limit?: number;
+            }
+          | null;
+        const message =
+          payload?.error && payload.error.trim().length > 0
+            ? payload.error
+            : getFriendlyFrontendError();
+
+        setError(message);
+
+        if (payload?.limitReached) {
+          setLimitPopup({
+            message,
+            resetAt: payload.resetAt ?? null,
+            windowHours: payload.windowHours ?? 5,
+            limit: payload.limit ?? 3,
+          });
+        }
+
+        return;
       }
 
       const payload = (await response.json()) as RoastResult;
       setRoastProgress(100);
       setAnalysis(payload);
       setResumeName(selectedFile.name);
-      setStatusMessage("Roast complete. If it stings in the right places, the rewrite button is live.");
-    } catch (caughtError) {
-      setError(
-        caughtError instanceof Error && caughtError.message
-          ? caughtError.message
-          : getFriendlyFrontendError(),
-      );
+      await refreshProStatus();
+      setStatusMessage("Roast complete. The report is ready, and Pro tools are standing by if you want the full cleanup.");
+    } catch {
+      setError(getFriendlyFrontendError());
     } finally {
       setIsRoasting(false);
     }
   }
 
-  async function handleCheckout(product: PremiumProduct = "polished_rewrite") {
-    if (!analysis) {
+  async function handleCheckout(product: PremiumProduct = "pro_subscription") {
+    if (product !== "pro_subscription" && !analysis) {
       setError("Run the free roast first so there is something to improve.");
+      return;
+    }
+
+    if (product === "pro_subscription" && !isSignedIn) {
+      setActiveTab("account");
+      setError("Create a free account first so your Pro plan stays tied to you across devices.");
       return;
     }
 
@@ -818,8 +938,8 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          resumeText: analysis.normalizedResume,
-          resumeHash: analysis.resumeHash,
+          resumeText: analysis?.normalizedResume,
+          resumeHash: analysis?.resumeHash,
           resumeName,
           product,
           rewriteSessionId: paidSessionId,
@@ -838,6 +958,28 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
       setError(getFriendlyFrontendError());
     } finally {
       setIsCheckingOut(false);
+    }
+  }
+
+  async function handleOpenBillingPortal() {
+    setIsOpeningBillingPortal(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/pro/portal", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error(getFriendlyFrontendError());
+      }
+
+      const payload = (await response.json()) as { url: string };
+      window.location.assign(payload.url);
+    } catch {
+      setError("We couldn't open billing management right now. Please try again in a moment.");
+    } finally {
+      setIsOpeningBillingPortal(false);
     }
   }
 
@@ -1100,6 +1242,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
     setPaidSessionId(null);
     setStatusMessage(null);
     setError(null);
+    setLimitPopup(null);
     setDidCopy(false);
     setDidCopyCoverLetter(false);
     setRoastLoadingIndex(0);
@@ -1117,7 +1260,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
 
   function handlePreviewRewriteAction() {
     setStatusMessage(
-      "Owner preview is showing the unlocked rewrite state. Real regeneration still needs a paid session.",
+      "Owner preview is showing the unlocked Pro rewrite state. Real regeneration still needs Pro access.",
     );
     document
       .getElementById("premium-rewrite")
@@ -1126,7 +1269,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
 
   function handlePreviewCoverLetterAction() {
     setStatusMessage(
-      "Owner preview is showing the full-premium state. Real cover-letter generation still needs a paid session.",
+      "Owner preview is showing the full Pro state. Real cover-letter generation still needs a real Pro subscription.",
     );
     document
       .getElementById("cover-letter")
@@ -1137,9 +1280,11 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
   const isBusy =
     isRoasting ||
     isCheckingOut ||
+    isOpeningBillingPortal ||
     isVerifyingPayment ||
     isRewriting ||
     isGeneratingCoverLetter;
+  const isProActive = Boolean(proStatus?.isProActive);
   const paidUnlocked = Boolean(paidSessionId);
   const ownerForcesUnpaid =
     ownerPreviewEnabled && ownerPreviewMode === "unpaid";
@@ -1148,16 +1293,21 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
     (ownerPreviewMode === "rewrite_paid" || ownerPreviewMode === "full_paid");
   const ownerForcesFullPremium =
     ownerPreviewEnabled && ownerPreviewMode === "full_paid";
+  const effectiveProUnlocked = ownerForcesUnpaid
+    ? false
+    : ownerForcesRewriteUnlocked
+      ? true
+      : isProActive;
   const effectivePaidUnlocked = ownerForcesUnpaid
     ? false
     : ownerForcesRewriteUnlocked
       ? true
-      : paidUnlocked;
+      : isProActive || paidUnlocked;
   const effectiveCoverLetterUnlocked = ownerForcesUnpaid
     ? false
     : ownerForcesFullPremium
       ? true
-      : Boolean(coverLetterSessionId);
+      : isProActive || Boolean(coverLetterSessionId);
   const usingPreviewRewriteSample =
     ownerForcesRewriteUnlocked && !rewrite;
   const usingPreviewCoverLetterSample =
@@ -1169,8 +1319,11 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
     ? null
     : coverLetter ??
       (ownerForcesFullPremium ? ownerPreviewCoverLetterSample : null);
-  const canRequestRewrite = Boolean(paidSessionId);
-  const canRequestCoverLetter = Boolean(coverLetterSessionId);
+  const canRequestRewrite = effectiveProUnlocked || Boolean(paidSessionId);
+  const canRequestCoverLetter =
+    effectiveProUnlocked || Boolean(coverLetterSessionId);
+  const remainingRoasts = proStatus?.remainingRoasts ?? null;
+  const freeTierResetTime = formatResetTime(proStatus?.resetAt ?? null);
   const shouldShowEmailGate =
     Boolean(analysis) &&
     !emailSubmitted &&
@@ -1195,7 +1348,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
               <Flame className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <p className="eyebrow text-[11px]">Free roast. Paid redemption.</p>
+              <p className="eyebrow text-[11px]">Free tier plus Pro tools</p>
               <p className="text-lg font-semibold tracking-tight">RoastMyCV</p>
             </div>
           </div>
@@ -1203,7 +1356,12 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
             <AuthControls />
             <div className="flex flex-wrap gap-2 text-sm text-muted sm:gap-3">
               <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">PDF under 5MB</span>
-              <span className="rounded-full border border-coral/20 bg-coral/10 px-4 py-2 text-coral">$2.99 rewrite</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">
+                Free: 3 roasts / 5h
+              </span>
+              <span className="rounded-full border border-coral/20 bg-coral/10 px-4 py-2 text-coral">
+                Pro: $10/mo
+              </span>
             </div>
           </div>
         </header>
@@ -1259,7 +1417,8 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                   <p className="max-w-2xl text-lg leading-8 text-muted md:text-xl">
                     Upload the PDF you actually send to employers. RoastMyCV tears into
                     weak verbs, empty buzzwords, missing metrics, ATS-hostile formatting,
-                    and bullets that somehow say nothing. Then it offers the $2.99 glow-up.
+                    and bullets that somehow say nothing. Free users get 3 roasts every
+                    5 hours. Pro unlocks unlimited roasts, rewrites, and cover letters.
                   </p>
                 </div>
 
@@ -1300,13 +1459,13 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                   <div className="rounded-[24px] border border-white/10 bg-black/18 p-4">
                     <p className="eyebrow text-[11px]">Why people pay</p>
                     <p className="mt-3 text-lg font-semibold">
-                      The rewrite keeps your facts and changes the execution.
+                      Pro bundles the rewrite, cover letter, and unlimited uploads in one plan.
                     </p>
                   </div>
                   <div className="rounded-[24px] border border-white/10 bg-black/18 p-4">
                     <p className="eyebrow text-[11px]">Built for trust</p>
                     <p className="mt-3 text-lg font-semibold">
-                      One clear path: roast free, then unlock the glow-up.
+                      One clear path: try the free tier, then upgrade if you want the full toolkit.
                     </p>
                   </div>
                 </div>
@@ -1326,7 +1485,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                   Start with the free roast.
                 </h2>
                 <p className="text-sm leading-7 text-muted">
-                  PDF only. No signup wall. Just direct emotional damage and useful fixes.
+                  PDF only. Free users get 3 roasts every 5 hours. Pro removes the limit and unlocks the full toolkit.
                 </p>
               </div>
 
@@ -1384,32 +1543,46 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                   <button
                     type="button"
                     className={secondaryButtonClass}
-                    disabled={!analysis || isBusy || effectivePaidUnlocked}
-                    onClick={() => void handleCheckout("polished_rewrite")}
+                    disabled={isBusy}
+                    onClick={() => {
+                      if (effectiveProUnlocked) {
+                        document
+                          .getElementById("premium-rewrite")
+                          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        return;
+                      }
+
+                      void handleCheckout("pro_subscription");
+                    }}
                   >
                     {isCheckingOut ? (
                       <>
                         <LoaderCircle className="h-4 w-4 animate-spin" />
                         Opening Stripe...
                       </>
-                    ) : effectivePaidUnlocked ? (
+                    ) : effectiveProUnlocked ? (
                       <>
-                        {paidUnlocked ? (
+                        {isProActive ? (
                           <>
                             <Check className="h-4 w-4" />
-                            Rewrite unlocked
+                            Pro active
                           </>
                         ) : (
                           <>
                             <Shield className="h-4 w-4" />
-                            Rewrite preview on
+                            Pro preview on
                           </>
                         )}
+                      </>
+                    ) : !isSignedIn ? (
+                      <>
+                        <Shield className="h-4 w-4" />
+                        Sign in for Pro
                       </>
                     ) : (
                       <>
                         <BadgeDollarSign className="h-4 w-4" />
-                        Unlock rewrite for $2.99
+                        Go Pro - $10/mo
                       </>
                     )}
                   </button>
@@ -1432,9 +1605,20 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                 <p className="eyebrow text-[11px]">Current status</p>
                 <p className="mt-3 text-base font-semibold">
                   {isRoasting
-                    ? "Premium roast in progress"
+                    ? "Roast in progress"
                     : statusMessage || "Waiting for a PDF worth arguing with."}
                 </p>
+                {proStatus && (
+                  <p className="mt-3 text-sm leading-7 text-muted">
+                    {proStatus.isProActive
+                      ? "Pro is active. Upload as many resumes as you want and use the rewrite plus cover-letter tools without limits."
+                      : remainingRoasts !== null
+                        ? remainingRoasts > 0
+                          ? `${remainingRoasts} free roast${remainingRoasts === 1 ? "" : "s"} left in this ${proStatus.windowHours}-hour window${freeTierResetTime ? `, resets around ${freeTierResetTime}` : ""}.`
+                          : `Free limit reached for now${freeTierResetTime ? `, resets around ${freeTierResetTime}` : ""}.`
+                        : `Free users get ${proStatus.freeLimit} roasts every ${proStatus.windowHours} hours.`}
+                  </p>
+                )}
                 {isRoasting && (
                   <div className="mt-4 rounded-[20px] border border-lime/18 bg-lime/7 p-4">
                     <div className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-lime">
@@ -1583,28 +1767,28 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
 
         <section id="premium-rewrite" className="motion-enter motion-delay-8 space-y-8 pb-10">
           <div className="space-y-3">
-            <p className="eyebrow">Paid unlock</p>
+            <p className="eyebrow">Pro toolkit</p>
             <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
-              The polished rewrite
+              Unlimited rewrites and cover letters
             </h2>
             <p className="max-w-xl text-base leading-8 text-muted">
-              After Stripe confirms the payment, the app rewrites the exact roasted snapshot into
-              a cleaner, recruiter-ready version.
+              One Pro plan unlocks unlimited roasts, stronger resume rewrites, and matching
+              cover letters built from the same resume snapshot.
             </p>
           </div>
 
           <div className="grid gap-5 lg:grid-cols-[0.38fr_0.62fr]">
             <div className="poster-shell rounded-[30px] p-5 sm:rounded-[34px] sm:p-7">
-              <p className="eyebrow">{analysis?.upgradePitch.eyebrow || "Upgrade"}</p>
+              <p className="eyebrow">{analysis?.upgradePitch.eyebrow || "Go Pro"}</p>
               <h3 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">
                 {analysis?.upgradePitch.headline ||
-                  "Unlock the polished version when the roast earns your trust."}
+                  "Unlock the full Pro toolkit when the roast earns your trust."}
               </h3>
               <div className="mt-6 space-y-3">
                 {(analysis?.upgradePitch.points || [
                   "Rewrite the summary so it sounds specific instead of ceremonial.",
                   "Turn vague bullets into sharper, more ATS-friendly accomplishments.",
-                  "Keep the facts grounded and use placeholders where the evidence is thin.",
+                  "Generate a matching cover letter and keep roasting new versions without the free-tier limit.",
                 ]).map((point) => (
                   <div
                     key={point}
@@ -1616,58 +1800,92 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
               </div>
 
               <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                {!effectivePaidUnlocked ? (
+                {!effectiveProUnlocked ? (
                   <button
                     type="button"
                     className={primaryButtonClass}
-                    disabled={!analysis || isBusy}
-                    onClick={() => void handleCheckout("polished_rewrite")}
+                    disabled={isBusy}
+                    onClick={() => void handleCheckout("pro_subscription")}
                   >
                     {isCheckingOut ? (
                       <>
                         <LoaderCircle className="h-4 w-4 animate-spin" />
                         Opening Stripe...
                       </>
+                    ) : !isSignedIn ? (
+                      <>
+                        <Shield className="h-4 w-4" />
+                        Sign in for Pro
+                      </>
                     ) : (
                       <>
                         <BadgeDollarSign className="h-4 w-4" />
-                        Pay $2.99
+                        Go Pro - $10/mo
                       </>
                     )}
                   </button>
                 ) : (
-                  <button
-                    type="button"
-                    className={primaryButtonClass}
-                    disabled={!analysis || isBusy}
-                    onClick={() => {
-                      if (paidSessionId) {
-                        void requestRewrite(paidSessionId, {
-                          forceRegenerate: true,
-                        });
-                        return;
-                      }
+                  <>
+                    <button
+                      type="button"
+                      className={primaryButtonClass}
+                      disabled={!analysis || isBusy}
+                      onClick={() => {
+                        if (paidSessionId) {
+                          void requestRewrite(paidSessionId, {
+                            forceRegenerate: true,
+                          });
+                          return;
+                        }
 
-                      handlePreviewRewriteAction();
-                    }}
-                  >
-                    {isRewriting ? (
-                      <>
-                        <LoaderCircle className="h-4 w-4 animate-spin" />
-                        Rewriting...
-                      </>
-                    ) : canRequestRewrite ? (
-                      <>
-                        <Sparkles className="h-4 w-4" />
-                        Regenerate rewrite
-                      </>
-                    ) : (
-                      <>
-                        <Shield className="h-4 w-4" />
-                        Preview rewrite
-                      </>
+                        if (effectiveProUnlocked) {
+                          void requestRewrite(undefined, {
+                            forceRegenerate: true,
+                          });
+                          return;
+                        }
+
+                        handlePreviewRewriteAction();
+                      }}
+                    >
+                      {isRewriting ? (
+                        <>
+                          <LoaderCircle className="h-4 w-4 animate-spin" />
+                          Rewriting...
+                        </>
+                      ) : canRequestRewrite ? (
+                        <>
+                          <Sparkles className="h-4 w-4" />
+                          Regenerate rewrite
+                        </>
+                      ) : (
+                        <>
+                          <Shield className="h-4 w-4" />
+                          Preview rewrite
+                        </>
+                      )}
+                    </button>
+                    {isProActive && (
+                      <button
+                        type="button"
+                        className={secondaryButtonClass}
+                        disabled={isOpeningBillingPortal}
+                        onClick={() => void handleOpenBillingPortal()}
+                      >
+                        {isOpeningBillingPortal ? (
+                          <>
+                            <LoaderCircle className="h-4 w-4 animate-spin" />
+                            Opening billing...
+                          </>
+                        ) : (
+                          <>
+                            <BadgeDollarSign className="h-4 w-4" />
+                            Manage Pro
+                          </>
+                        )}
+                      </button>
                     )}
-                  </button>
+                  </>
                 )}
                 <button
                   type="button"
@@ -1711,7 +1929,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
               {ownerPreviewEnabled && ownerPreviewMode !== "actual" && (
                 <p className="mt-4 text-sm leading-7 text-muted">
                   Owner preview is changing this section only for your browser. It does not
-                  create a fake Stripe session or run premium generation by itself.
+                  create a fake Stripe subscription or run Pro generation by itself.
                 </p>
               )}
             </div>
@@ -1721,7 +1939,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                 {!visibleRewrite ? (
                   <div className="space-y-5">
                     <p className="text-xl font-semibold tracking-tight sm:text-2xl">
-                      The premium version appears here after payment.
+                      The rewrite appears here after Pro is active.
                     </p>
                     <div className="rounded-[22px] border border-white/10 bg-black/18 p-4 font-mono text-sm text-muted sm:rounded-[24px] sm:p-5">
                       <p># Candidate Name</p>
@@ -1734,7 +1952,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                 ) : (
                   <div className="space-y-6">
                     <div className="space-y-3">
-                      <p className="eyebrow">Unlocked rewrite</p>
+                      <p className="eyebrow">Pro rewrite</p>
                       <h3 className="text-2xl font-semibold tracking-tight sm:text-3xl">
                         {visibleRewrite.title}
                       </h3>
@@ -1766,26 +1984,25 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                     {usingPreviewRewriteSample && (
                       <div className="rounded-[22px] border border-gold/18 bg-gold/10 p-4 text-sm leading-7 text-gold">
                         Owner preview is showing a sample rewrite here so you can inspect the
-                        unlocked layout before paying.
+                        unlocked Pro layout before subscribing.
                       </div>
                     )}
                   </div>
                 )}
               </div>
 
-              {visibleRewrite && !effectiveCoverLetterUnlocked && (
+              {!effectiveCoverLetterUnlocked && (
                 <div className="poster-shell rounded-[30px] p-5 sm:rounded-[34px] sm:p-7">
                   <div className="grid gap-6 lg:grid-cols-[0.52fr_0.48fr]">
                     <div className="space-y-5">
                       <div className="space-y-3">
-                        <p className="eyebrow">One more thing</p>
+                        <p className="eyebrow">Included with Pro</p>
                         <h3 className="text-2xl font-semibold tracking-tight sm:text-3xl">
                           Want a matching cover letter?
                         </h3>
                         <p className="text-base leading-8 text-muted">
-                          We already know your resume, tone, and positioning. The add-on turns
-                          that same snapshot into a short cover letter that feels tailored instead
-                          of painfully generic.
+                          Pro turns the same resume snapshot into a short, sharper cover letter
+                          without asking you to buy a second add-on.
                         </p>
                       </div>
 
@@ -1804,24 +2021,28 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                         <button
                           type="button"
                           className={primaryButtonClass}
-                          disabled={isBusy || ownerForcesFullPremium}
-                          onClick={() => void handleCheckout("cover_letter")}
+                          disabled={isBusy}
+                          onClick={() => void handleCheckout("pro_subscription")}
                         >
                           {isCheckingOut ? (
                             <>
                               <LoaderCircle className="h-4 w-4 animate-spin" />
                               Opening Stripe...
                             </>
+                          ) : !isSignedIn ? (
+                            <>
+                              <Shield className="h-4 w-4" />
+                              Sign in for Pro
+                            </>
                           ) : (
                             <>
                               <Sparkles className="h-4 w-4" />
-                              Get cover letter - $1.99
+                              Go Pro - $10/mo
                             </>
                           )}
                         </button>
                         <p className="text-sm leading-7 text-muted">
-                          Same resume snapshot. No corporate &quot;I am writing to
-                          apply&quot; opener.
+                          Same resume snapshot. Unlimited roasts, unlimited rewrites, and the cover letter included.
                         </p>
                       </div>
                     </div>
@@ -1843,7 +2064,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                 </div>
               )}
 
-              {visibleRewrite && effectiveCoverLetterUnlocked && (
+              {effectiveCoverLetterUnlocked && (
                 <div id="cover-letter" className="poster-shell rounded-[30px] p-5 sm:rounded-[34px] sm:p-7">
                   {!visibleCoverLetter ? (
                     <div className="space-y-5">
@@ -1865,10 +2086,15 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                         <button
                           type="button"
                           className={primaryButtonClass}
-                          disabled={isGeneratingCoverLetter}
+                          disabled={!analysis || isGeneratingCoverLetter}
                           onClick={() => {
                             if (coverLetterSessionId) {
                               void requestCoverLetter(coverLetterSessionId);
+                              return;
+                            }
+
+                            if (effectiveProUnlocked) {
+                              void requestCoverLetter();
                               return;
                             }
 
@@ -1926,7 +2152,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                       {usingPreviewCoverLetterSample && (
                         <div className="rounded-[22px] border border-gold/18 bg-gold/10 p-4 text-sm leading-7 text-gold">
                           Owner preview is showing a sample cover letter here so you can inspect
-                          the full-premium state before paying.
+                          the full Pro state before subscribing.
                         </div>
                       )}
                     </div>
@@ -1949,7 +2175,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
             </h2>
             <p className="max-w-lg text-base leading-8 text-muted">
               A good landing page should answer the first questions fast: what this does,
-              what happens next, and why the paid version is worth it.
+              what happens next, and why the Pro version is worth it.
             </p>
           </div>
 
@@ -1972,7 +2198,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
             </h2>
             <p className="max-w-2xl text-base leading-8 text-muted">
               Instead of vague “AI optimization,” the page now shows the exact kinds of
-              changes the paid rewrite is supposed to make.
+              changes the Pro rewrite is supposed to make.
             </p>
           </div>
 
@@ -2003,7 +2229,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
           <div className="space-y-3">
             <p className="eyebrow">Before Vs After</p>
             <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
-              The paid glow-up should feel obvious.
+              The Pro glow-up should feel obvious.
             </h2>
             <p className="max-w-lg text-base leading-8 text-muted">
               People convert faster when they can see the shape of the upgrade. This block
@@ -2074,8 +2300,8 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                   </h2>
                   <p className="text-base leading-8 text-muted">
                     {isSignedIn
-                      ? "Signed-in roasts are saved to your history, paid unlocks can be restored more reliably, and the one-hour free-roast cooldown follows your account instead of only this browser."
-                      : "The free roast still works without login. An account just gives you saved history, easier recovery across devices, and a cleaner way to keep your progress tied to you."}
+                      ? "Signed-in roasts are saved to your history, Pro can stay tied to your account across devices, and the free-tier roast limit follows your account instead of only this browser."
+                      : "The free roast still works without login. An account gives you saved history and is required only if you want the Pro plan attached to you across devices."}
                   </p>
                 </div>
 
@@ -2092,14 +2318,27 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                     </Link>
                   )}
                   {isSignedIn ? (
-                    <button
-                      type="button"
-                      className={secondaryButtonClass}
-                      onClick={() => setActiveTab("main")}
-                    >
-                      <ArrowRight className="h-4 w-4" />
-                      Back to main
-                    </button>
+                    isProActive ? (
+                      <button
+                        type="button"
+                        className={secondaryButtonClass}
+                        disabled={isOpeningBillingPortal}
+                        onClick={() => void handleOpenBillingPortal()}
+                      >
+                        <BadgeDollarSign className="h-4 w-4" />
+                        {isOpeningBillingPortal ? "Opening billing..." : "Manage Pro"}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className={secondaryButtonClass}
+                        disabled={isBusy}
+                        onClick={() => void handleCheckout("pro_subscription")}
+                      >
+                        <BadgeDollarSign className="h-4 w-4" />
+                        Go Pro - $10/mo
+                      </button>
+                    )
                   ) : (
                     <Link href="/sign-in" className={secondaryButtonClass}>
                       <Shield className="h-4 w-4" />
@@ -2118,8 +2357,8 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                     isSignedIn
                       ? "Every signed-in roast is saved to your private history page so you can revisit older feedback."
                       : "Sign in if you want each roast saved to a private history page instead of living only in browser storage.",
-                    "Paid rewrites and cover letters can be restored more reliably if you come back later or switch devices.",
-                    "Free roasts are limited to one per hour per account or guest browser to protect the app and model spend.",
+                    "Pro bundles unlimited roasts, unlimited rewrites, and unlimited cover letters in one monthly plan.",
+                    "Free users get 3 roasts every 5 hours per account or guest browser to protect the app and model spend.",
                   ].map((item) => (
                     <div
                       key={item}
@@ -2141,7 +2380,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                 <p className="mt-4 text-base leading-8 text-muted">
                   {isSignedIn
                     ? "Your History page shows the timestamp, score, ATS score, lead line, and expandable details for every saved roast."
-                    : "The account is optional on purpose. You can still test the product first, then sign in when you want saved feedback and easier recovery."}
+                    : "The account is optional on purpose. You can still test the product first, then sign in when you want saved feedback or the Pro plan."}
                 </p>
 
                 <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -2176,6 +2415,65 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
               </div>
             </div>
           </section>
+        )}
+
+        {limitPopup && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 sm:items-center">
+            <div className="poster-shell w-full max-w-xl rounded-[30px] p-6 sm:rounded-[34px] sm:p-8">
+              <div className="space-y-5">
+                <div className="space-y-3">
+                  <p className="eyebrow">Free limit hit</p>
+                  <h3 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                    You used all {limitPopup.limit} free roasts in this {limitPopup.windowHours}-hour window.
+                  </h3>
+                  <p className="text-base leading-8 text-muted">
+                    {limitPopup.message}
+                  </p>
+                  <p className="text-sm leading-7 text-muted">
+                    {limitPopup.resetAt
+                      ? `Your free uploads open back up around ${formatResetTime(limitPopup.resetAt)}.`
+                      : "The free-tier counter resets automatically after the window passes."}
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    className={primaryButtonClass}
+                    disabled={isCheckingOut}
+                    onClick={() => {
+                      setLimitPopup(null);
+                      void handleCheckout("pro_subscription");
+                    }}
+                  >
+                    {isCheckingOut ? (
+                      <>
+                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                        Opening Stripe...
+                      </>
+                    ) : !isSignedIn ? (
+                      <>
+                        <Shield className="h-4 w-4" />
+                        Sign in for Pro
+                      </>
+                    ) : (
+                      <>
+                        <BadgeDollarSign className="h-4 w-4" />
+                        Go Pro - $10/mo
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    className={secondaryButtonClass}
+                    onClick={() => setLimitPopup(null)}
+                  >
+                    Maybe later
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {ownerPreviewEnabled && (
