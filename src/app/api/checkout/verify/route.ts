@@ -86,9 +86,15 @@ export async function GET(request: Request) {
     const paid =
       session.status === "complete" &&
       session.payment_status === "paid" &&
-      (product === "polished_rewrite" || product === "cover_letter");
+      (product === "polished_rewrite" ||
+        product === "cover_letter" ||
+        product === "donation");
 
-    if (paid && product && metadataDetails.resumeHash) {
+    if (
+      paid &&
+      (product === "polished_rewrite" || product === "cover_letter") &&
+      metadataDetails.resumeHash
+    ) {
       try {
         storedRecord = await markPremiumSessionPaid({
           sessionId,

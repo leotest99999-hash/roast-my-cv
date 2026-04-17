@@ -9,6 +9,10 @@ import { auth } from "@clerk/nextjs/server";
 
 export const runtime = "nodejs";
 
+const supportedDonationAmounts = [
+  1, 5, 10, 20, 50, 100, 200, 300, 500, 750, 1000,
+] as const;
+
 export async function POST(request: Request) {
   try {
     const { userId } = await auth();
@@ -17,6 +21,7 @@ export async function POST(request: Request) {
       resumeHash?: string;
       resumeName?: string;
       product?: string;
+      donationAmount?: number;
       rewriteSessionId?: string;
       analysis?: RoastResult | null;
       rewrite?: RewriteResult | null;
@@ -88,6 +93,60 @@ export async function POST(request: Request) {
         logApiError(
           "checkout:missing-url",
           new Error("Stripe created a pro subscription session without a checkout URL."),
+        );
+        return jsonApiError();
+      }
+
+      return Response.json({ url: session.url });
+    }
+
+    if (product === "donation") {
+      const donationAmount = Number(body.donationAmount);
+
+      if (
+        !Number.isInteger(donationAmount) ||
+        !supportedDonationAmounts.includes(
+          donationAmount as (typeof supportedDonationAmounts)[number],
+        )
+      ) {
+        return jsonApiError(
+          "Pick one of the supported donation amounts before opening Stripe.",
+          400,
+        );
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        billing_address_collection: "auto",
+        submit_type: "pay",
+        success_url: `${origin}/?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/#support`,
+        line_items: [
+          {
+            quantity: 1,
+            price_data: {
+              currency: "usd",
+              unit_amount: donationAmount * 100,
+              product_data: {
+                name: "Support RoastMyCV",
+                description:
+                  "A one-time donation to help fund the first product, AI costs, and future improvements.",
+              },
+            },
+          },
+        ],
+        metadata: {
+          app: "RoastMyCV",
+          product,
+          donationAmount: String(donationAmount),
+          ...(userId ? { clerkUserId: userId } : {}),
+        },
+      });
+
+      if (!session.url) {
+        logApiError(
+          "checkout:missing-url",
+          new Error("Stripe created a donation session without a checkout URL."),
         );
         return jsonApiError();
       }

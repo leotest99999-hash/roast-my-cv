@@ -4,6 +4,7 @@ export const premiumProducts = [
   "polished_rewrite",
   "cover_letter",
   "pro_subscription",
+  "donation",
 ] as const;
 
 export type PremiumProduct = (typeof premiumProducts)[number];

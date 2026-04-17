@@ -124,7 +124,11 @@ export async function POST(request: Request) {
       return Response.json({ received: true });
     }
 
-    if (!metadataDetails.product || !metadataDetails.resumeHash) {
+    if (
+      (metadataDetails.product !== "polished_rewrite" &&
+        metadataDetails.product !== "cover_letter") ||
+      !metadataDetails.resumeHash
+    ) {
       return Response.json({ received: true });
     }
 

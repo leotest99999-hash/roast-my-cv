@@ -42,7 +42,7 @@ type RoastMyCvAppProps = {
   initialSessionId: string | null;
 };
 
-type HomeTab = "main" | "learn" | "account";
+type HomeTab = "main" | "learn" | "account" | "support";
 
 type StoredSession = {
   analysis: RoastResult | null;
@@ -90,6 +90,7 @@ const heroTrustPoints = [
   "PDF only",
   "Roast in under 30 seconds",
 ] as const;
+const donationAmounts = [1, 5, 10, 20, 50, 100, 200, 300, 500, 750, 1000] as const;
 const homeTabs: Array<{
   value: HomeTab;
   label: string;
@@ -109,6 +110,11 @@ const homeTabs: Array<{
     value: "account",
     label: "Account",
     description: "History, sign-in, and saved roast perks.",
+  },
+  {
+    value: "support",
+    label: "Support",
+    description: "Send a one-time tip if you want to back the project.",
   },
 ] as const;
 const howItWorksSteps = [
@@ -335,6 +341,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
   const { isSignedIn } = useAuth();
   const [hydrated, setHydrated] = useState(false);
   const [activeTab, setActiveTab] = useState<HomeTab>("main");
+  const [selectedDonationAmount, setSelectedDonationAmount] = useState<number>(10);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [resumeName, setResumeName] = useState<string | null>(null);
   const [email, setEmail] = useState("");
@@ -350,6 +357,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
   const [paidSessionId, setPaidSessionId] = useState<string | null>(null);
   const [proStatus, setProStatus] = useState<ProStatus | null>(null);
   const [limitPopup, setLimitPopup] = useState<RoastLimitPopupState | null>(null);
+  const [lastDonationAmount, setLastDonationAmount] = useState<number | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [didCopy, setDidCopy] = useState(false);
@@ -760,6 +768,23 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
         return;
       }
 
+      if (verification.product === "donation") {
+        if (window.location.search.includes("session_id=")) {
+          window.history.replaceState({}, "", `${window.location.pathname}#support`);
+        }
+
+        setActiveTab("support");
+        setLastDonationAmount(
+          verification.amountTotal ? verification.amountTotal / 100 : null,
+        );
+        setStatusMessage(
+          verification.amountTotal
+            ? `Thanks for the $${(verification.amountTotal / 100).toFixed(0)} support. That seriously helps keep RoastMyCV improving.`
+            : "Thanks for backing RoastMyCV. That support genuinely helps a lot.",
+        );
+        return;
+      }
+
       if (verification.product === "pro_subscription") {
         await refreshProStatus();
 
@@ -918,8 +943,16 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
     }
   }
 
-  async function handleCheckout(product: PremiumProduct = "pro_subscription") {
-    if (product !== "pro_subscription" && !analysis) {
+  async function handleCheckout(
+    product: PremiumProduct = "pro_subscription",
+    options?: {
+      donationAmount?: number;
+    },
+  ) {
+    const requiresRoastContext =
+      product === "polished_rewrite" || product === "cover_letter";
+
+    if (requiresRoastContext && !analysis) {
       setError("Run the free roast first so there is something to improve.");
       return;
     }
@@ -927,6 +960,12 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
     if (product === "pro_subscription" && !isSignedIn) {
       setActiveTab("account");
       setError("Create a free account first so your Pro plan stays tied to you across devices.");
+      return;
+    }
+
+    if (product === "donation" && !options?.donationAmount) {
+      setActiveTab("support");
+      setError("Pick a donation amount before opening Stripe.");
       return;
     }
 
@@ -942,6 +981,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
           resumeHash: analysis?.resumeHash,
           resumeName,
           product,
+          donationAmount: options?.donationAmount,
           rewriteSessionId: paidSessionId,
           analysis,
           rewrite,
@@ -1338,6 +1378,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
   const showMainTab = activeTab === "main";
   const showLearnTab = activeTab === "learn";
   const showAccountTab = activeTab === "account";
+  const showSupportTab = activeTab === "support";
 
   return (
     <main className="relative overflow-hidden">
@@ -1368,7 +1409,7 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
 
         <section className="motion-enter motion-delay-2">
           <div className="poster-shell rounded-[28px] p-3 sm:rounded-[30px] sm:p-4">
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-4">
               {homeTabs.map((tab) => {
                 const isActive = activeTab === tab.value;
 
@@ -2411,6 +2452,136 @@ export function RoastMyCvApp({ initialSessionId }: RoastMyCvAppProps) {
                       </Link>
                     </>
                   )}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {showSupportTab && (
+          <section className="grid gap-5 lg:grid-cols-[0.42fr_0.58fr]">
+            <div className="poster-shell motion-enter motion-delay-4 rounded-[30px] p-6 sm:rounded-[34px] sm:p-8">
+              <div className="space-y-5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full border border-coral/18 bg-coral/10 text-coral">
+                    <BadgeDollarSign className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="eyebrow text-[11px]">Support</p>
+                    <p className="text-lg font-semibold tracking-tight">
+                      Back the first build if you want to.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
+                    Toss a small tip into the fire.
+                  </h2>
+                  <p className="text-base leading-8 text-muted">
+                    RoastMyCV is my first creation and still a small solo product. If it
+                    helped you, a one-time donation helps cover AI calls, deploy costs, and
+                    the time it takes to keep improving the rewrite quality.
+                  </p>
+                </div>
+
+                <div className="rounded-[24px] border border-lime/18 bg-lime/8 p-4 text-sm leading-7 text-muted-strong">
+                  Donations are optional, separate from Pro, and go straight through Stripe.
+                  You do not need an account to send one.
+                </div>
+
+                {lastDonationAmount ? (
+                  <div className="rounded-[24px] border border-coral/20 bg-coral/10 p-4">
+                    <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-coral">
+                      Thank you
+                    </p>
+                    <p className="mt-2 text-base leading-8 text-foreground">
+                      Your ${lastDonationAmount.toFixed(0)} donation came through. That means a lot,
+                      especially on a first project.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="space-y-5">
+              <div className="poster-shell motion-enter motion-delay-5 rounded-[30px] p-5 sm:rounded-[34px] sm:p-7">
+                <p className="eyebrow">Choose an amount</p>
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  {donationAmounts.map((amount) => {
+                    const isActive = selectedDonationAmount === amount;
+
+                    return (
+                      <button
+                        key={amount}
+                        type="button"
+                        className={`rounded-[20px] border px-4 py-4 text-left transition ${
+                          isActive
+                            ? "border-coral/28 bg-coral/12"
+                            : "border-white/10 bg-white/4 hover:border-white/18 hover:bg-white/7"
+                        }`}
+                        onClick={() => setSelectedDonationAmount(amount)}
+                      >
+                        <p className="text-lg font-semibold tracking-tight text-foreground">
+                          ${amount}
+                        </p>
+                        <p className="mt-1 text-xs leading-6 text-muted">
+                          One-time donation
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                  <button
+                    type="button"
+                    className={primaryButtonClass}
+                    disabled={isBusy}
+                    onClick={() =>
+                      void handleCheckout("donation", {
+                        donationAmount: selectedDonationAmount,
+                      })
+                    }
+                  >
+                    {isCheckingOut ? (
+                      <>
+                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                        Opening Stripe...
+                      </>
+                    ) : (
+                      <>
+                        <BadgeDollarSign className="h-4 w-4" />
+                        Donate ${selectedDonationAmount}
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    className={secondaryButtonClass}
+                    onClick={() => setActiveTab("main")}
+                  >
+                    <ArrowRight className="h-4 w-4" />
+                    Back to the app
+                  </button>
+                </div>
+              </div>
+
+              <div className="poster-shell motion-enter motion-delay-6 rounded-[30px] p-5 sm:rounded-[34px] sm:p-7">
+                <p className="eyebrow">What it supports</p>
+                <div className="mt-5 grid gap-3">
+                  {[
+                    "Model costs for roasts, rewrites, and cover letters while I keep making the output better.",
+                    "Design, polish, and mobile fixes so the product feels more real every week.",
+                    "The small runway that lets a first project keep growing instead of getting abandoned.",
+                  ].map((item) => (
+                    <div
+                      key={item}
+                      className="rounded-[20px] border border-white/10 bg-white/4 p-4 text-sm leading-7 text-muted-strong"
+                    >
+                      {item}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
